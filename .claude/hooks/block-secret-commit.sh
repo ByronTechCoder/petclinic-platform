@@ -44,8 +44,8 @@ if echo "$COMMAND" | grep -qE 'git\s+(add|commit)'; then
     '\.pfx($|\s)'             # PFX certificates
     'kubeconfig'              # Kubernetes config with cluster creds
     'aws-credentials'         # AWS credential files
-    'credentials\.json'       # Service account credentials
-    'credentials\.yaml'       # Credential files
+     '(^|[/[:space:]])credentials\.json($|[/[:space:]])' # literal credentials.json (not e.g. rds-credentials.json)
+     '(^|[/[:space:]])credentials\.yaml($|[/[:space:]])' # literal credentials.yaml (not e.g. rds-credentials.yaml — an ExternalSecret CR, no actual secret material)
   )
 
   for pattern in "${SECRET_FILE_PATTERNS[@]}"; do
