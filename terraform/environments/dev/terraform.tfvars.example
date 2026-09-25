@@ -1,0 +1,5 @@
+aws_region  = "eu-central-1"
+environment = "dev"
+project     = "petclinic"
+
+domain_name = "example.com"

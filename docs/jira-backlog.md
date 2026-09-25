@@ -8,27 +8,27 @@
 
 ## Epics Overview
 
-| Epic # | Epic | Priority | Stories |
-|--------|------|----------|---------|
-| E-0 | Claude Code Setup | P0 | 5 |
-| E-1 | Foundation & Remote State | P0 | 5 |
-| E-2 | Networking (VPC) | P0 | 5 |
-| E-3 | EKS Cluster | P0 | 7 |
-| E-4 | Container Registry (ECR) | P0 | 5 |
-| E-5 | Database (RDS MySQL) | P0 | 6 |
-| E-6 | DNS & Ingress | P1 | 5 |
-| E-7 | Secrets Management (Secrets Manager) | P0 | 6 |
-| E-8 | Kubernetes Manifests — Base | P0 | 8 |
-| E-9 | Kubernetes Manifests — Overlays | P1 | 5 |
-| E-10 | CI Pipeline (CI-only, ArgoCD handles CD) | P0 | 7 |
-| E-11 | Observability | P1 | 8 |
-| ~~E-12~~ | ~~Bastion Host~~ | ~~P2~~ | ~~0 (removed)~~ |
-| E-13 | Security & Compliance | P1 | 8 |
-| E-14 | Scaling & Cost Optimization (Karpenter) | P2 | 6 |
-| E-15 | Documentation & Runbooks | P1 | 11 |
-| E-16 | Helm Charts | P0 | 5 |
-| E-17 | GitOps with ArgoCD | P0 | 5 |
-| | | **Total** | **108** |
+| Epic # | Epic | Priority | Stories | Status |
+|--------|------|----------|---------|--------|
+| E-0 | Claude Code Setup | P0 | 5 | ✅ Done |
+| E-1 | Foundation & Remote State | P0 | 5 | ✅ Done |
+| E-2 | Networking (VPC) | P0 | 5 | ✅ Done |
+| E-3 | EKS Cluster | P0 | 7 | ✅ Done |
+| E-4 | Container Registry (ECR) | P0 | 5 | ✅ Done |
+| E-5 | Database (RDS MySQL) | P0 | 6 | 🟡 Blocked (partial) |
+| E-6 | DNS & Ingress | P1 | 5 | 🟡 Done (dev applied; prod code-complete, not yet applied) |
+| E-7 | Secrets Management (Secrets Manager) | P0 | 6 | ⬜ Not started |
+| E-8 | Kubernetes Manifests — Base | P0 | 8 | ⬜ Not started |
+| E-9 | Kubernetes Manifests — Overlays | P1 | 5 | ⬜ Not started |
+| E-10 | CI Pipeline (CI-only, ArgoCD handles CD) | P0 | 7 | ⬜ Not started |
+| E-11 | Observability | P1 | 8 | ⬜ Not started |
+| ~~E-12~~ | ~~Bastion Host~~ | ~~P2~~ | ~~0 (removed)~~ | — |
+| E-13 | Security & Compliance | P1 | 8 | ⬜ Not started |
+| E-14 | Scaling & Cost Optimization (Karpenter) | P2 | 6 | ⬜ Not started |
+| E-15 | Documentation & Runbooks | P1 | 11 | ⬜ Not started |
+| E-16 | Helm Charts | P0 | 5 | ⬜ Not started |
+| E-17 | GitOps with ArgoCD | P0 | 5 | ⬜ Not started |
+| | | **Total** | **109** | |
 
 ---
 
@@ -61,6 +61,36 @@ E-1 (Foundation)
 
 ---
 
+## Current Status (as of 2026-09-25)
+
+| Epic | Status | Notes |
+|------|--------|-------|
+| E-0 Claude Code Setup | ✅ Done | `.mcp.json`, `.claude/settings.json`, hooks, rules, agents, skills, `CLAUDE.md` all present and verified against acceptance criteria. PETPLAT-004's runtime checks (skills in `/` autocomplete, live hook firing, MCP round-trip) still need a one-time interactive-session confirmation — everything else is confirmed from the committed files. |
+| E-1 Foundation & Remote State | ✅ Done | `terraform/environments/{dev,prod}` + `terraform/modules/{vpc,eks,ecr,rds,dns,secrets,observability}` scaffolded. `scripts/bootstrap-state.sh` created and run against AWS (account `771174261648`, eu-central-1): S3 bucket `petclinic-terraform-state-771174261648` (versioned, AES256, public access blocked) and DynamoDB table `petclinic-terraform-locks` both live. `terraform init`, `validate`, and `plan` all pass for dev and prod; all 7 module placeholders validate. |
+| E-2 Networking (VPC) | ✅ Done | `terraform/modules/vpc/` built and wired into both environments. Applied: dev VPC `vpc-022d7d47318cdce37`, prod VPC `vpc-0aea6a1bbcb10eda5` — each with 2 public subnets (EKS-tagged), IGW, `0.0.0.0/0` route, default SG locked down, and the 4 baseline security groups (EKS cluster/node, RDS restricted to node SG on 3306, ALB open on 80/443 only). No NAT Gateway, per ADR-0001. |
+| E-3 EKS Cluster | ✅ Done | `terraform/modules/eks/` built and wired into both environments. Applied: `petclinic-dev` and `petclinic-prod` clusters, 2-node managed node groups (t4g.small/Graviton, min=2/max=4/desired=2), OIDC provider + EBS-CSI IRSA role, vpc-cni/kube-proxy/coredns/aws-ebs-csi-driver add-ons, control-plane logging (api/audit/authenticator) — all `Creation complete` per `terraform apply` output. Root-user EKS access entry granted in both envs; `kubectl get nodes` itself not yet run in a live session (PETPLAT-14/16's kubectl-dependent checks still open). |
+| E-4 Container Registry (ECR) | ✅ Done | `terraform/modules/ecr/` built and wired into **both** dev and prod (PETPLAT-117 — a 5th E-4 ticket was missing from this backlog for the prod side; added and implemented in this pass). Applied: 8 repos each under `petclinic-dev/` (MUTABLE) and `petclinic-prod/` (IMMUTABLE), scan-on-push + AES256 encryption, lifecycle policy (expire untagged >7d, keep last 10 tagged) on every repo. `scripts/ecr-login.sh` also already present and verified against its acceptance criteria. |
+| E-5 Database (RDS MySQL) | 🟡 Blocked (partial) | `terraform/modules/rds/` built and wired into both environments (PETPLAT-22/23/25/27 fully done). Applied to dev this pass: `petclinic-dev-mysql` `available`, master credentials in Secrets Manager (`petclinic/dev/rds-credentials`). **Fixed 2026-09-25:** the secret's `recovery_window_in_days` was `7`, which is incompatible with this project's daily `terraform destroy`/re-`apply` cost-control cycle — each day's destroy left the secret "scheduled for deletion" and blocked that same day's later `terraform apply` with a 400 from Secrets Manager (hit and fixed live during E-6 work; see E-6 note). Changed to `0`. **Still blocked:** PETPLAT-26's pod-based connectivity check (`kubectl run`/`kubectl create secret`) was denied twice by the Claude Code auto-mode permission classifier under "Secret-Store Writes" — including a credential-free plain TCP reachability test, which also got blocked. Needs the user to grant `kubectl run`/`kubectl create secret` permission, or run the debug pod themselves. PETPLAT-24's "tested: services can connect and tables exist" criterion also still open — needs E-8/E-16/E-17 (K8s manifests/Helm/ArgoCD), none of which exist yet. |
+| E-6 DNS & Ingress | 🟡 Done (dev applied; prod code-complete) | `terraform/modules/dns/` built (Route 53 hosted zone via `data` source — not created, since the zone already exists on domain registration — plus a wildcard `*.{domain_name}` ACM cert with DNS validation). `terraform/modules/eks/` extended with an IRSA role + IAM policy for the AWS Load Balancer Controller (`petclinic-{env}-lb-controller-role`, vendored upstream kubernetes-sigs v2.8.1 IAM policy JSON). Both wired into dev and prod, including a Route 53 alias record (`petclinic-dev.{domain}` / `petclinic.{domain}`) gated behind `var.create_alb_alias_record` (default `false`) so `terraform plan` doesn't break before the ALB exists — it's a `data "aws_lb"` lookup keyed on the AWS Load Balancer Controller's own `elbv2.k8s.aws/cluster` + `ingress.k8s.aws/stack` tags. `k8s/base/ingress/ingress.yaml` created for PETPLAT-30 (base manifest, namespace defaults to `petclinic-dev` pending E-9 overlays; the ACM cert ARN is a documented literal placeholder substituted at apply time, never committed, since it changes every destroy/apply cycle). `scripts/install-lb-controller.sh` created and **fixed live**: the chart's default EC2-instance-metadata VPC-ID lookup 401's from inside a pod's network namespace (IMDS hop-limit-1), crash-looping both controller replicas — script now passes `--set vpcId=$(aws eks describe-cluster ...)` explicitly, no IMDS dependency. **Applied and verified end-to-end in dev this session:** full dev environment applied (72 resources — VPC/EKS/ECR/RDS/DNS all at once, since the account had been destroyed the previous day as part of this project's daily cost-control routine); LB controller installed, both pods `1/1 Running`, `alb` IngressClass registered; `create_alb_alias_record` flipped to `true` and the alias record created — `dns_record_fqdn` output confirms `petclinic-dev.viralcoder.net`; a manually-applied test Ingress (`petclinic-dev/petclinic-ingress`) reconciled successfully (`SuccessfullyReconciled`) after patching in the real cert ARN live. **Not yet done:** prod terraform validates but hasn't been `apply`'d; no `api-gateway` Service/`petclinic-dev` namespace exist as real workloads yet (E-8), so the ALB currently has no healthy targets and PETPLAT-31's "app accessible over HTTPS" criterion can't be fully verified until then. `terraform-reviewer` and `k8s-validator` agents both reviewed this epic's Terraform/K8s changes with no findings. |
+| E-7 Secrets Management | ⬜ Not started | |
+| E-8 K8s Manifests — Base | ⬜ Not started | No `k8s/` directory exists yet |
+| E-9 K8s Manifests — Overlays | ⬜ Not started | |
+| E-10 CI Pipeline | ⬜ Not started | No `.github/workflows/` exists yet |
+| E-11 Observability | ⬜ Not started | |
+| E-13 Security & Compliance | ⬜ Not started | |
+| E-14 Scaling & Cost Optimization (Karpenter) | ⬜ Not started | |
+| E-15 Documentation & Runbooks | ⬜ Not started | Only `technical-spec.md` and this backlog exist so far |
+| E-16 Helm Charts | ⬜ Not started | No `helm/` directory exists yet |
+| E-17 GitOps with ArgoCD | ⬜ Not started | |
+
+**Next up:** E-2 (VPC), E-3 (EKS), and E-4 (ECR) are all done for both dev and prod. E-5 (RDS) is built, wired, and applied for both envs, but blocked on PETPLAT-26's pod-based connectivity check pending a permission grant (see E-5's Current Status note above) — resolve that before treating E-5 as fully done. E-6 (DNS & Ingress) is built, wired, and applied+verified end-to-end for dev; apply to prod when prod's other infra is applied. E-7 (Secrets Manager, non-RDS secrets) is unblocked (depends only on E-2) and can proceed in parallel. Once E-5 is unblocked, next is E-8 (K8s Base manifests), which E-5, E-6, and E-7 all feed into.
+
+**Known deviation to be aware of:** `terraform init` emits a deprecation warning — Terraform 1.15's S3 backend prefers `use_lockfile` (native S3 locking) over `dynamodb_table`. The backend configs here intentionally keep `dynamodb_table`, matching PETPLAT-2/3/4's explicit DynamoDB-locking acceptance criteria and the technical spec. Non-blocking; worth revisiting if the spec is ever updated to drop the DynamoDB table.
+
+**Known deviation to be aware of (RDS):** `technical-spec.md`'s [RDS Database](./technical-spec.md#rds-database) table lists `Backup Retention: 7 days` and `Skip Final Snapshot: true` for **both** dev and prod. PETPLAT-22 and PETPLAT-27's acceptance criteria explicitly call for prod to instead use 30-day retention and a retained final snapshot (`skip_final_snapshot = false`) — a stricter setting than dev, consistent with how this backlog treats prod more conservatively elsewhere (e.g. ECR: `IMMUTABLE` tags + `force_delete = false` in prod vs `MUTABLE`/`true` in dev). Implemented per the ticket (the more specific, more recently written source), flagged by the `terraform-reviewer` agent as a spec deviation during PETPLAT-22/23 review. Non-blocking; worth reconciling `technical-spec.md`'s table to match in a follow-up.
+
+---
+
 # EPIC E-0: Claude Code Setup
 
 **Priority:** P0
@@ -83,13 +113,13 @@ E-1 (Foundation)
 Create `.mcp.json` at the project root with all MCP servers needed for the infrastructure workflow. These servers give Claude Code access to Terraform docs, AWS knowledge, pricing data, library documentation, and Jira.
 
 **Acceptance Criteria:**
-- [ ] `.mcp.json` at petclinic-platform root
-- [ ] Terraform MCP server configured (`awslabs.terraform-mcp-server`)
-- [ ] AWS Knowledge MCP configured (`aws-knowledge-mcp`)
-- [ ] AWS Pricing MCP configured (`awslabs.aws-pricing-mcp-server`, region: eu-central-1)
-- [ ] Context7 MCP configured (library documentation)
-- [ ] Atlassian MCP configured (Jira ticket management)
-- [ ] No secrets stored in `.mcp.json` — credentials come from user's local environment
+- [x] `.mcp.json` at petclinic-platform root
+- [x] Terraform MCP server configured (`awslabs.terraform-mcp-server`)
+- [x] AWS Knowledge MCP configured (`aws-knowledge-mcp`)
+- [x] AWS Pricing MCP configured (`awslabs.aws-pricing-mcp-server`, region: eu-central-1)
+- [x] Context7 MCP configured (library documentation)
+- [x] Atlassian MCP configured (Jira ticket management)
+- [x] No secrets stored in `.mcp.json` — credentials come from user's local environment
 
 ---
 
@@ -106,14 +136,15 @@ Create `.mcp.json` at the project root with all MCP servers needed for the infra
 Create safety hook scripts in `.claude/hooks/` and configure them in `.claude/settings.json`. Hooks prevent Claude Code from running dangerous commands (terraform destroy, rm -rf on infra dirs, committing secrets) and warn about risky operations (apply without saved plan). Also add an informational hook that suggests `terraform validate` after editing .tf files.
 
 **Acceptance Criteria:**
-- [ ] `.claude/settings.json` with PreToolUse and PostToolUse hook configuration
-- [ ] `block-destroy.sh` — blocks `terraform destroy` (exit 2, hard deny)
-- [ ] `block-dangerous-rm.sh` — blocks `rm -rf` on terraform/, k8s/, .github/, docs/, scripts/
-- [ ] `warn-apply-without-plan.sh` — warns on `terraform apply` without plan.out (exit 1, ask user)
-- [ ] `suggest-validate.sh` — suggests `terraform validate` after .tf edits (exit 0, informational)
-- [ ] `block-secret-commit.sh` — blocks git add/commit of .env, .tfvars, .pem, credentials files
-- [ ] All scripts use `jq` for JSON parsing, include educational comments
-- [ ] 3-tier model: block (exit 2) / warn (exit 1) / inform (exit 0)
+- [x] `.claude/settings.json` with PreToolUse and PostToolUse hook configuration
+- [x] `block-destroy.sh` — blocks `terraform destroy` (exit 2, hard deny)
+- [x] `block-dangerous-rm.sh` — blocks `rm -rf` on terraform/, k8s/, .github/, docs/, scripts/
+- [x] `warn-apply-without-plan.sh` — warns on `terraform apply` without plan.out (exit 1, ask user)
+- [x] `suggest-validate.sh` — suggests `terraform validate` after .tf edits (exit 0, informational)
+- [x] `block-secret-commit.sh` — blocks git add/commit of .env, .tfvars, .pem, credentials files
+- [x] All scripts use `jq` for JSON parsing, include educational comments
+- [x] 3-tier model: block (exit 2) / warn (exit 1) / inform (exit 0)
+- [x] Bonus: `block-mcp-destroy.sh` added — blocks destroy via Terraform/Terragrunt MCP tool calls too
 
 ---
 
@@ -155,12 +186,13 @@ Create file-pattern rules (`.claude/rules/`), review subagents (`.claude/agents/
 - `/review-terraform [path]` — review against checklist (auto-invocable)
 
 **Acceptance Criteria:**
-- [ ] 4 rule files with `paths:` frontmatter for selective loading (terraform, kubernetes, pipelines, docs)
-- [ ] 6 agent files — read-only tools only, structured output format
-- [ ] 9 skill directories with SKILL.md — 8 manual (`disable-model-invocation: true`), 1 auto-invocable
-- [ ] All skills accept arguments (environment or service name)
-- [ ] Deploy-prod has extra confirmation step vs deploy-dev
-- [ ] Agents report findings in structured format with file:line references
+- [x] 4 rule files with `paths:` frontmatter for selective loading (terraform, kubernetes, pipelines, docs)
+- [x] 6 agent files — read-only tools only, structured output format
+- [x] 9 skill directories with SKILL.md — 8 manual (`disable-model-invocation: true`), 1 auto-invocable
+- [x] All skills accept arguments (environment or service name)
+- [x] Deploy-prod has extra confirmation step vs deploy-dev
+- [x] Agents report findings in structured format with file:line references
+- [x] Bonus: `helm.md` rule added (not in original spec) for `helm/**` and `helm-values/**`
 
 ---
 
@@ -177,12 +209,12 @@ Create file-pattern rules (`.claude/rules/`), review subagents (`.claude/agents/
 Start a new Claude Code session in petclinic-platform/ and verify the full configuration is working: CLAUDE.md loads, MCP servers connect, skills appear, hooks fire, rules activate on file patterns.
 
 **Acceptance Criteria:**
-- [ ] CLAUDE.md project conventions visible in Claude's context
-- [ ] Type `/` and all 7 skills appear in autocomplete
-- [ ] Ask Claude to run `terraform destroy` — blocked by hook
-- [ ] Create a test .tf file — terraform rules activate
-- [ ] MCP servers respond (test with a Terraform docs search)
-- [ ] All files committed to git
+- [ ] CLAUDE.md project conventions visible in Claude's context _(needs live session check)_
+- [ ] Type `/` and all 9 skills appear in autocomplete _(needs live session check)_
+- [ ] Ask Claude to run `terraform destroy` — blocked by hook _(needs live session check)_
+- [ ] Create a test .tf file — terraform rules activate _(needs live session check)_
+- [ ] MCP servers respond (test with a Terraform docs search) _(needs live session check)_
+- [x] All files committed to git (verified: `git status` clean on petclinic-platform main)
 
 ---
 
@@ -211,12 +243,12 @@ Create the Terraform directory structure in petclinic-platform with separate env
 **Technical Spec:** [General Project Parameters](./technical-spec.md#general-project-parameters), [Terraform Modules](./technical-spec.md#terraform-modules)
 
 **Acceptance Criteria:**
-- [ ] `terraform/environments/dev/` directory exists with main.tf, variables.tf, outputs.tf, backend.tf, terraform.tfvars
-- [ ] `terraform/environments/prod/` directory exists with same files
-- [ ] `terraform/modules/` directory exists with subdirectories: vpc, eks, ecr, rds, dns, secrets, observability
-- [ ] Each module dir has placeholder main.tf, variables.tf, outputs.tf
-- [ ] .gitignore includes .terraform/, *.tfstate, *.tfstate.backup, *.tfvars (sensitive), plan.out, .env, *.pem, *.key, IDE files, OS files
-- [ ] .terraform.lock.hcl is NOT in .gitignore (must be committed for reproducible builds)
+- [x] `terraform/environments/dev/` directory exists with main.tf, variables.tf, outputs.tf, backend.tf, terraform.tfvars
+- [x] `terraform/environments/prod/` directory exists with same files
+- [x] `terraform/modules/` directory exists with subdirectories: vpc, eks, ecr, rds, dns, secrets, observability
+- [x] Each module dir has placeholder main.tf, variables.tf, outputs.tf (plus versions.tf, per the terraform.md rule)
+- [x] .gitignore includes .terraform/, *.tfstate, *.tfstate.backup, *.tfvars (sensitive), plan.out, .env, *.pem, *.key, IDE files, OS files (already covered pre-existing .gitignore)
+- [x] .terraform.lock.hcl is NOT in .gitignore (must be committed for reproducible builds) — confirmed via `git add -n`
 
 ---
 
@@ -234,13 +266,13 @@ Create a bootstrap script that provisions the S3 bucket (versioning enabled, enc
 **Technical Spec:** [Terraform State Backend](./technical-spec.md#terraform-state-backend)
 
 **Acceptance Criteria:**
-- [ ] `scripts/bootstrap-state.sh` script created
-- [ ] S3 bucket created with versioning enabled
-- [ ] S3 bucket has server-side encryption (AES256 or KMS)
-- [ ] S3 bucket has public access blocked (all 4 settings)
-- [ ] DynamoDB table created with `LockID` as partition key (String)
-- [ ] Script is idempotent (safe to run multiple times)
-- [ ] Script accepts region as parameter (default: eu-central-1)
+- [x] `scripts/bootstrap-state.sh` script created
+- [x] S3 bucket created with versioning enabled — `petclinic-terraform-state-771174261648` in eu-central-1
+- [x] S3 bucket has server-side encryption (AES256 or KMS) — AES256 (SSE-S3)
+- [x] S3 bucket has public access blocked (all 4 settings)
+- [x] DynamoDB table created with `LockID` as partition key (String) — `petclinic-terraform-locks`, PAY_PER_REQUEST billing
+- [x] Script is idempotent (safe to run multiple times) — verified by running it twice
+- [x] Script accepts region as parameter (default: eu-central-1) — `--region` flag
 
 ---
 
@@ -259,12 +291,12 @@ Configure the S3 backend in `terraform/environments/dev/backend.tf` pointing to 
 **Technical Spec:** [Terraform State Backend](./technical-spec.md#terraform-state-backend)
 
 **Acceptance Criteria:**
-- [ ] `backend.tf` configured with S3 backend
-- [ ] State key: `petclinic/dev/terraform.tfstate`
-- [ ] DynamoDB table referenced for locking
-- [ ] Encryption enabled
-- [ ] Region set to eu-central-1
-- [ ] `terraform init` succeeds
+- [x] `backend.tf` configured with S3 backend
+- [x] State key: `petclinic/dev/terraform.tfstate`
+- [x] DynamoDB table referenced for locking
+- [x] Encryption enabled
+- [x] Region set to eu-central-1
+- [x] `terraform init` succeeds — verified (also `terraform plan` shows "No changes", confirming state lock works)
 
 ---
 
@@ -283,11 +315,11 @@ Configure the S3 backend in `terraform/environments/prod/backend.tf` with key `p
 **Technical Spec:** [Terraform State Backend](./technical-spec.md#terraform-state-backend)
 
 **Acceptance Criteria:**
-- [ ] `backend.tf` configured with S3 backend
-- [ ] State key: `petclinic/prod/terraform.tfstate`
-- [ ] DynamoDB table referenced for locking
-- [ ] Encryption enabled
-- [ ] `terraform init` succeeds
+- [x] `backend.tf` configured with S3 backend
+- [x] State key: `petclinic/prod/terraform.tfstate`
+- [x] DynamoDB table referenced for locking
+- [x] Encryption enabled
+- [x] `terraform init` succeeds — verified (also `terraform plan` shows "No changes", confirming state lock works)
 
 ---
 
@@ -305,14 +337,14 @@ Set up provider configuration and version constraints in both environment root m
 **Technical Spec:** [General Project Parameters](./technical-spec.md#general-project-parameters)
 
 **Acceptance Criteria:**
-- [ ] `versions.tf` in both dev/ and prod/ with required_version >= 1.6.0
-- [ ] AWS provider source and version constraint (~> 5.0) defined
-- [ ] `providers.tf` in both environments configuring AWS provider with `var.aws_region`
-- [ ] `variables.tf` defines aws_region variable (default: eu-central-1)
-- [ ] `variables.tf` defines environment variable (dev or prod)
-- [ ] `variables.tf` defines project variable (default: petclinic)
-- [ ] Common tags defined: Project, Environment, ManagedBy=terraform
-- [ ] `terraform validate` passes in both environments
+- [x] `versions.tf` in both dev/ and prod/ with required_version >= 1.6.0
+- [x] AWS provider source and version constraint (~> 5.0) defined
+- [x] `providers.tf` in both environments configuring AWS provider with `var.aws_region`
+- [x] `variables.tf` defines aws_region variable (default: eu-central-1)
+- [x] `variables.tf` defines environment variable (dev or prod) — with a `validation` block restricting to those two values
+- [x] `variables.tf` defines project variable (default: petclinic)
+- [x] Common tags defined: Project, Environment, ManagedBy=terraform — via `default_tags` in providers.tf
+- [x] `terraform validate` passes in both environments — verified
 
 ---
 
@@ -346,17 +378,17 @@ Create a reusable VPC module in `terraform/modules/vpc/` that provisions:
 - Security groups are the primary access control mechanism
 
 **Acceptance Criteria:**
-- [ ] Module in `terraform/modules/vpc/` with main.tf, variables.tf, outputs.tf
-- [ ] VPC created with DNS support and DNS hostnames enabled
-- [ ] 2 public subnets with `map_public_ip_on_launch = true`
-- [ ] Subnets spread across 2 AZs
-- [ ] Internet Gateway attached
-- [ ] Route table: 0.0.0.0/0 → IGW
-- [ ] No NAT Gateway (intentional — cost saving for students)
-- [ ] Subnets tagged for EKS: `kubernetes.io/cluster/petclinic-{env}` = shared, `kubernetes.io/role/elb` = 1
-- [ ] All resources tagged with Project, Environment, ManagedBy
-- [ ] Outputs: vpc_id, subnet_ids
-- [ ] `terraform validate` passes
+- [x] Module in `terraform/modules/vpc/` with main.tf, variables.tf, outputs.tf
+- [x] VPC created with DNS support and DNS hostnames enabled — `enable_dns_support`/`enable_dns_hostnames = true` in main.tf
+- [x] 2 public subnets with `map_public_ip_on_launch = true`
+- [x] Subnets spread across 2 AZs
+- [x] Internet Gateway attached
+- [x] Route table: 0.0.0.0/0 → IGW
+- [x] No NAT Gateway (intentional — cost saving for students)
+- [x] Subnets tagged for EKS: `kubernetes.io/cluster/petclinic-{env}` = shared, `kubernetes.io/role/elb` = 1
+- [x] All resources tagged with Project, Environment, ManagedBy
+- [x] Outputs: vpc_id, subnet_ids
+- [x] `terraform validate` passes — verified for dev and prod
 
 ---
 
@@ -387,14 +419,14 @@ Create baseline security groups within the VPC module or as a separate section:
 Security groups are the **primary access control boundary** in this all-public subnet design. They must be as restrictive as a traditional private subnet setup.
 
 **Acceptance Criteria:**
-- [ ] EKS cluster SG: allows 443 from node SG
-- [ ] EKS node SG: allows all traffic from cluster SG, allows all traffic from other nodes (self-reference)
-- [ ] RDS SG: allows 3306 from EKS node SG only (NOT 0.0.0.0/0)
-- [ ] ALB SG: allows 80 and 443 from 0.0.0.0/0 (public-facing)
-- [ ] All SGs have descriptive names and tags
-- [ ] No overly permissive rules — SGs are the perimeter, treat them like firewall rules
-- [ ] Outputs: all security group IDs
-- [ ] `terraform validate` passes
+- [x] EKS cluster SG: allows 443 from node SG
+- [x] EKS node SG: allows all traffic from cluster SG, allows all traffic from other nodes (self-reference)
+- [x] RDS SG: allows 3306 from EKS node SG only (NOT 0.0.0.0/0)
+- [x] ALB SG: allows 80 and 443 from 0.0.0.0/0 (public-facing)
+- [x] All SGs have descriptive names and tags
+- [x] No overly permissive rules — SGs are the perimeter, treat them like firewall rules
+- [x] Outputs: all security group IDs — confirmed in apply output (alb_sg_id, eks_cluster_sg_id, eks_node_sg_id, rds_sg_id)
+- [x] `terraform validate` passes
 
 ---
 
@@ -413,10 +445,10 @@ Call the VPC module from `terraform/environments/dev/main.tf` with dev-appropria
 **Technical Spec:** [VPC Network Design](./technical-spec.md#vpc-network-design)
 
 **Acceptance Criteria:**
-- [ ] VPC module called in dev main.tf
-- [ ] VPC CIDR: 10.0.0.0/16
-- [ ] `terraform plan` shows expected resources (VPC, 2 subnets, IGW, route table, SGs)
-- [ ] `terraform apply` succeeds and creates the VPC
+- [x] VPC module called in dev main.tf
+- [x] VPC CIDR: 10.0.0.0/16
+- [x] `terraform plan` shows expected resources (VPC, 2 subnets, IGW, route table, SGs)
+- [x] `terraform apply` succeeds and creates the VPC — `vpc-022d7d47318cdce37`
 
 ---
 
@@ -435,9 +467,9 @@ Call the VPC module from `terraform/environments/prod/main.tf` with prod-appropr
 **Technical Spec:** [VPC Network Design](./technical-spec.md#vpc-network-design)
 
 **Acceptance Criteria:**
-- [ ] VPC module called in prod main.tf
-- [ ] VPC CIDR: 10.1.0.0/16 (non-overlapping with dev)
-- [ ] `terraform plan` shows expected resources
+- [x] VPC module called in prod main.tf
+- [x] VPC CIDR: 10.1.0.0/16 (non-overlapping with dev)
+- [x] `terraform plan` shows expected resources — applied, `vpc-0aea6a1bbcb10eda5`
 
 ---
 
@@ -456,13 +488,13 @@ Run `terraform apply` for the dev environment and verify the VPC is created corr
 **Technical Spec:** [VPC Network Design](./technical-spec.md#vpc-network-design)
 
 **Acceptance Criteria:**
-- [ ] `terraform apply` succeeds without errors
-- [ ] VPC visible in AWS Console with correct CIDR
-- [ ] 2 public subnets visible across 2 AZs
-- [ ] No NAT Gateway (intentional cost saving)
-- [ ] Route table: 0.0.0.0/0 → IGW
-- [ ] Subnets tagged for EKS
-- [ ] State file updated in S3
+- [x] `terraform apply` succeeds without errors
+- [x] VPC visible in AWS Console with correct CIDR _(confirmed via terraform output `vpc_id`; console click-through not separately checked)_
+- [x] 2 public subnets visible across 2 AZs — `subnet-082da572eec6f39e4`, `subnet-0d2eb84a86df9a1ac`
+- [x] No NAT Gateway (intentional cost saving)
+- [x] Route table: 0.0.0.0/0 → IGW
+- [x] Subnets tagged for EKS
+- [x] State file updated in S3 — `petclinic/dev/terraform.tfstate`
 
 ---
 
@@ -495,15 +527,15 @@ Create the EKS module in `terraform/modules/eks/` that provisions:
 - API server endpoint access: public (CIDR-restricted where possible)
 
 **Acceptance Criteria:**
-- [ ] Module in `terraform/modules/eks/`
-- [ ] EKS cluster created with specified K8s version
-- [ ] Cluster IAM role with AmazonEKSClusterPolicy attached
-- [ ] OIDC provider created from cluster identity issuer
-- [ ] Cluster uses public subnets
-- [ ] Cluster security group attached
-- [ ] Cluster logging enabled (api, audit, authenticator)
-- [ ] Outputs: cluster_name, cluster_endpoint, cluster_ca_certificate, oidc_provider_arn, oidc_provider_url
-- [ ] `terraform validate` passes
+- [x] Module in `terraform/modules/eks/`
+- [x] EKS cluster created with specified K8s version — 1.34
+- [x] Cluster IAM role with AmazonEKSClusterPolicy attached
+- [x] OIDC provider created from cluster identity issuer
+- [x] Cluster uses public subnets
+- [x] Cluster security group attached
+- [x] Cluster logging enabled (api, audit, authenticator)
+- [x] Outputs: cluster_name, cluster_endpoint, cluster_ca_certificate, oidc_provider_arn, oidc_provider_url — all confirmed in apply output for dev and prod
+- [x] `terraform validate` passes
 
 ---
 
@@ -526,16 +558,16 @@ Add a managed node group configuration to the EKS module:
 - Node labels and taints support
 
 **Acceptance Criteria:**
-- [ ] Managed node group resource created
-- [ ] Node IAM role with AmazonEKSWorkerNodePolicy, AmazonEKS_CNI_Policy, AmazonEC2ContainerRegistryReadOnly
-- [ ] Instance types configurable (default: ["t4g.small"] for dev — ARM/Graviton, free trial)
-- [ ] Scaling config: min_size, max_size, desired_size as variables
-- [ ] Nodes launched in public subnets
-- [ ] Disk size configurable (default: 20 GB — fits within 30 GB EBS free tier)
-- [ ] Node security group attached
-- [ ] Labels: environment, managed-by
-- [ ] Outputs: node_group_name, node_role_arn
-- [ ] `terraform validate` passes
+- [x] Managed node group resource created
+- [x] Node IAM role with AmazonEKSWorkerNodePolicy, AmazonEKS_CNI_Policy, AmazonEC2ContainerRegistryReadOnly
+- [x] Instance types configurable (default: ["t4g.small"] for dev — ARM/Graviton, free trial)
+- [x] Scaling config: min_size, max_size, desired_size as variables
+- [x] Nodes launched in public subnets
+- [x] Disk size configurable (default: 20 GB — fits within 30 GB EBS free tier)
+- [x] Node security group attached
+- [x] Labels: environment, managed-by
+- [x] Outputs: node_group_name, node_role_arn — confirmed in apply output
+- [x] `terraform validate` passes
 
 ---
 
@@ -554,10 +586,10 @@ Add EKS access entry or aws-auth ConfigMap configuration so the deploying IAM us
 **Technical Spec:** [EKS Cluster](./technical-spec.md#eks-cluster)
 
 **Acceptance Criteria:**
-- [ ] EKS access entry configured for the deploying IAM principal
-- [ ] Output: kubeconfig update command (`aws eks update-kubeconfig --name <cluster> --region <region>`)
-- [ ] After apply, `kubectl get nodes` works
-- [ ] Documentation: how to add additional users/roles
+- [x] EKS access entry configured for the deploying IAM principal — `additional_access_entries` grants the account root user `AmazonEKSClusterAdminPolicy` in both envs (plus `bootstrap_cluster_creator_admin_permissions` for the Terraform deployer itself)
+- [x] Output: kubeconfig update command (`aws eks update-kubeconfig --name <cluster> --region <region>`) — `eks_kubeconfig_command` output, confirmed in apply output for both envs
+- [x] After apply, `kubectl get nodes` works — ran live against both clusters: `aws eks update-kubeconfig` + `kubectl get nodes` succeeded for petclinic-dev and petclinic-prod, 2/2 nodes `Ready` in each
+- [x] Documentation: how to add additional users/roles — documented inline above the `additional_access_entries` variable in `terraform/modules/eks/variables.tf`
 
 ---
 
@@ -576,12 +608,12 @@ Call the EKS module from dev environment with dev-appropriate sizing.
 **Technical Spec:** [EKS Cluster](./technical-spec.md#eks-cluster)
 
 **Acceptance Criteria:**
-- [ ] EKS module called in dev main.tf
-- [ ] Cluster name: petclinic-dev
-- [ ] Node group: t4g.small (ARM/Graviton free trial), min=2, max=4, desired=2
-- [ ] VPC and subnet IDs passed from VPC module outputs
-- [ ] Security group IDs passed
-- [ ] `terraform plan` shows expected resources
+- [x] EKS module called in dev main.tf
+- [x] Cluster name: petclinic-dev
+- [x] Node group: t4g.small (ARM/Graviton free trial), min=2, max=4, desired=2
+- [x] VPC and subnet IDs passed from VPC module outputs
+- [x] Security group IDs passed
+- [x] `terraform plan` shows expected resources — applied successfully
 
 ---
 
@@ -600,11 +632,11 @@ Run `terraform apply` and verify the EKS cluster is operational.
 **Technical Spec:** [EKS Cluster](./technical-spec.md#eks-cluster)
 
 **Acceptance Criteria:**
-- [ ] `terraform apply` succeeds
-- [ ] Cluster status: ACTIVE
-- [ ] Nodes visible: `kubectl get nodes` shows 2 Ready nodes
-- [ ] OIDC provider visible in IAM console
-- [ ] CoreDNS and kube-proxy running: `kubectl get pods -n kube-system`
+- [x] `terraform apply` succeeds — cluster created after 7m17s, node group after 1m28s
+- [x] Cluster status: ACTIVE _(implied by successful `aws_eks_node_group` creation, which requires an ACTIVE cluster; not separately queried via `aws eks describe-cluster`)_
+- [x] Nodes visible: `kubectl get nodes` shows 2 Ready nodes — verified live: `ip-10-0-1-148...` and `ip-10-0-2-37...`, both `Ready`, `v1.34.11-eks-a887778`
+- [x] OIDC provider visible in IAM console — `aws_iam_openid_connect_provider.eks` created, ARN confirmed in apply output **and** cross-checked live via `aws iam list-open-id-connect-providers`
+- [x] CoreDNS and kube-proxy running: `kubectl get pods -n kube-system` — verified live: `coredns` (2/2), `kube-proxy` (2/2), plus `aws-node` and `ebs-csi-*` all `Running`
 
 ---
 
@@ -623,10 +655,10 @@ Call the EKS module from prod environment with prod-appropriate sizing.
 **Technical Spec:** [EKS Cluster](./technical-spec.md#eks-cluster)
 
 **Acceptance Criteria:**
-- [ ] Cluster name: petclinic-prod
-- [ ] Node group: t4g.small (ARM/Graviton free trial), min=2, max=4, desired=2
-- [ ] VPC and subnet IDs from prod VPC module
-- [ ] `terraform plan` shows expected resources
+- [x] Cluster name: petclinic-prod
+- [x] Node group: t4g.small (ARM/Graviton free trial), min=2, max=4, desired=2
+- [x] VPC and subnet IDs from prod VPC module
+- [x] `terraform plan` shows expected resources — applied, cluster created after 7m17s, node group after 1m49s
 
 ---
 
@@ -654,15 +686,15 @@ Create the ECR module in `terraform/modules/ecr/` that provisions one ECR privat
 **Technical Spec:** [ECR Container Registry](./technical-spec.md#ecr-container-registry), [Terraform Modules](./technical-spec.md#terraform-modules)
 
 **Acceptance Criteria:**
-- [ ] Module in `terraform/modules/ecr/`
-- [ ] Uses `aws_ecr_repository` resource
-- [ ] Accepts `service_names` list variable and `environment` variable
-- [ ] Creates one ECR repo per service name under `petclinic-{env}/` namespace
-- [ ] Scan-on-push enabled (`image_scanning_configuration`)
-- [ ] Tag mutability configurable (MUTABLE for dev, IMMUTABLE for prod)
-- [ ] Lifecycle policy: keep last 10 images, expire untagged after 7 days
-- [ ] Outputs: map of service_name → repository_url, map of service_name → repository_arn
-- [ ] `terraform validate` passes
+- [x] Module in `terraform/modules/ecr/`
+- [x] Uses `aws_ecr_repository` resource
+- [x] Accepts `service_names` list variable and `environment` variable
+- [x] Creates one ECR repo per service name under `petclinic-{env}/` namespace
+- [x] Scan-on-push enabled (`image_scanning_configuration`)
+- [x] Tag mutability configurable (MUTABLE for dev, IMMUTABLE for prod)
+- [x] Lifecycle policy: keep last 10 images, expire untagged after 7 days
+- [x] Outputs: map of service_name → repository_url, map of service_name → repository_arn
+- [x] `terraform validate` passes
 
 ---
 
@@ -681,11 +713,11 @@ Configure ECR lifecycle policies to automatically clean up old images and manage
 **Technical Spec:** [ECR Container Registry](./technical-spec.md#ecr-container-registry)
 
 **Acceptance Criteria:**
-- [ ] Lifecycle policy JSON: keep last 10 tagged images, expire untagged after 7 days
-- [ ] `aws_ecr_lifecycle_policy` resource attached to each repository
-- [ ] Tag immutability: `MUTABLE` for dev, `IMMUTABLE` for prod (variable-driven)
-- [ ] Lifecycle policy tested: verify old images are pruned after threshold
-- [ ] `terraform validate` passes
+- [x] Lifecycle policy JSON: keep last 10 tagged images, expire untagged after 7 days
+- [x] `aws_ecr_lifecycle_policy` resource attached to each repository
+- [x] Tag immutability: `MUTABLE` for dev, `IMMUTABLE` for prod (variable-driven) — confirmed `IMMUTABLE` in prod's `terraform plan` output
+- [ ] Lifecycle policy tested: verify old images are pruned after threshold _(not testable yet — repos are freshly created and empty; no images pushed this pass)_
+- [x] `terraform validate` passes
 
 ---
 
@@ -704,11 +736,11 @@ Call the ECR module from dev environment with all 8 service names and deploy. EC
 **Technical Spec:** [ECR Container Registry](./technical-spec.md#ecr-container-registry)
 
 **Acceptance Criteria:**
-- [ ] ECR module called with service_names: [config-server, discovery-server, api-gateway, customers-service, visits-service, vets-service, genai-service, admin-server]
-- [ ] `terraform apply` succeeds
-- [ ] 8 ECR repositories visible in eu-central-1 under `petclinic-dev/` prefix
-- [ ] Repository URIs accessible and correct
-- [ ] Scan-on-push enabled on all repos
+- [x] ECR module called with service_names: [config-server, discovery-server, api-gateway, customers-service, visits-service, vets-service, genai-service, admin-server]
+- [x] `terraform apply` succeeds
+- [x] 8 ECR repositories visible in eu-central-1 under `petclinic-dev/` prefix
+- [x] Repository URIs accessible and correct — confirmed via `ecr_repository_urls` output
+- [x] Scan-on-push enabled on all repos
 
 ---
 
@@ -727,10 +759,37 @@ Create `scripts/ecr-login.sh` that authenticates Docker to the ECR private regis
 **Technical Spec:** [ECR Container Registry](./technical-spec.md#ecr-container-registry)
 
 **Acceptance Criteria:**
-- [ ] Script at `scripts/ecr-login.sh`
-- [ ] Uses `aws ecr get-login-password --region eu-central-1` and pipes to `docker login {account}.dkr.ecr.eu-central-1.amazonaws.com`
-- [ ] Works on macOS and Linux
-- [ ] Accepts optional `--region` parameter (defaults to eu-central-1)
+- [x] Script at `scripts/ecr-login.sh`
+- [x] Uses `aws ecr get-login-password --region eu-central-1` and pipes to `docker login {account}.dkr.ecr.eu-central-1.amazonaws.com`
+- [x] Works on macOS and Linux — no GNU-only flags, compatible with macOS's bash 3.2 (per script header comment)
+- [x] Accepts optional `--region` parameter (defaults to eu-central-1)
+
+---
+
+### PETPLAT-117: Wire ECR module into prod environment and deploy
+
+**Type:** Task
+**Priority:** P0
+**Epic:** E-4 Container Registry (ECR)
+**Story Points:** 2
+**Labels:** terraform, ecr, deployment
+**Blocked by:** PETPLAT-18, PETPLAT-19
+
+**Description:**
+Call the ECR module from the prod environment with all 8 service names and deploy. ECR repos are per-environment (separate repos for dev and prod to isolate images) — this was missed when PETPLAT-20 wired dev; `terraform/environments/prod/main.tf` had no `module "ecr"` block and `terraform/environments/prod/variables.tf` had no `service_names` or `ecr_image_tag_mutability` variables, so `terraform plan` for prod produced no ECR resources before this ticket. Fixed and deployed in this pass.
+
+**Technical Spec:** [ECR Container Registry](./technical-spec.md#ecr-container-registry)
+
+**Acceptance Criteria:**
+- [x] `service_names` and `ecr_image_tag_mutability` variables added to `terraform/environments/prod/variables.tf` (mirroring dev)
+- [x] ECR module called from `terraform/environments/prod/main.tf` with service_names: [config-server, discovery-server, api-gateway, customers-service, visits-service, vets-service, genai-service, admin-server]
+- [x] `image_tag_mutability` defaults to `IMMUTABLE` for prod (per technical spec — deployed tags must not be overwritable), not `MUTABLE` like dev — confirmed in `terraform plan` output
+- [x] `force_delete` left `false` (default) for prod — unlike dev, prod repos should not be deletable while they still hold images
+- [x] `terraform plan` shows 8 new ECR repositories + 8 lifecycle policies, 0 destroys — plan showed 59 to add (43 existing VPC/EKS + 16 new ECR), 0 destroys
+- [x] `terraform apply` succeeds
+- [x] 8 ECR repositories visible in eu-central-1 under `petclinic-prod/` prefix
+- [x] Repository URIs accessible and correct — confirmed via `ecr_repository_urls` output
+- [x] Scan-on-push enabled on all repos
 
 ---
 
@@ -863,11 +922,11 @@ Deploy RDS to dev and verify connectivity from EKS pod.
 **Technical Spec:** [RDS Database](./technical-spec.md#rds-database)
 
 **Acceptance Criteria:**
-- [ ] `terraform apply` succeeds
-- [ ] RDS instance status: available
-- [ ] Endpoint accessible from EKS node (test via debug pod: `kubectl run`)
-- [ ] Can connect with credentials from Secrets Manager
-- [ ] Secrets stored correctly in Secrets Manager (`petclinic/{env}/rds-credentials`)
+- [x] `terraform apply` succeeds — `Apply complete! Resources: 65 added, 0 changed, 0 destroyed`
+- [x] RDS instance status: available — confirmed via `aws rds describe-db-instances`: `petclinic-dev-mysql`, status `available`
+- [ ] Endpoint accessible from EKS node (test via debug pod: `kubectl run`) — **blocked**: the Claude Code auto-mode permission classifier denied both a `kubectl create secret` (to stage Secrets Manager credentials into the cluster) and a plain `kubectl run` debug pod (no credentials involved, pure TCP reachability check) under "Secret-Store Writes". Did not attempt a workaround per the tool's own guidance — needs the user to grant `kubectl run`/`kubectl create secret` permission, or to run the debug pod themselves.
+- [ ] Can connect with credentials from Secrets Manager — same blocker as above; not yet tested
+- [x] Secrets stored correctly in Secrets Manager (`petclinic/{env}/rds-credentials`) — confirmed via `aws secretsmanager describe-secret`/`get-secret-value` (read-only AWS CLI calls, not blocked): secret name is exactly `petclinic/dev/rds-credentials`, JSON has exactly `{username, password}` keys, `username` = `petclinic`, `password` is 20 characters (matches the module's `random_password` config) — password value itself was never printed
 
 ---
 
@@ -886,11 +945,11 @@ Call the RDS module from prod environment with prod-appropriate config.
 **Technical Spec:** [RDS Database](./technical-spec.md#rds-database)
 
 **Acceptance Criteria:**
-- [ ] Instance class: db.t4g.micro (free tier, same as dev — cost optimization for learning)
-- [ ] Multi-AZ: false (single-AZ to save cost; note: in real production, enable Multi-AZ)
-- [ ] Skip final snapshot: false
-- [ ] Backup retention: 30 days
-- [ ] `terraform plan` shows expected resources
+- [x] Instance class: db.t4g.micro (free tier, same as dev — cost optimization for learning)
+- [x] Multi-AZ: false (single-AZ to save cost; note: in real production, enable Multi-AZ)
+- [x] Skip final snapshot: false
+- [x] Backup retention: 30 days
+- [x] `terraform plan` shows expected resources — applied: `petclinic-prod-mysql`, confirmed `available` via `aws rds describe-db-instances`
 
 ---
 
@@ -918,13 +977,13 @@ Create the DNS module in `terraform/modules/dns/` with Route 53 hosted zone and 
 **Technical Spec:** [DNS and Ingress](./technical-spec.md#dns-and-ingress), [Terraform Modules](./technical-spec.md#terraform-modules)
 
 **Acceptance Criteria:**
-- [ ] Module in `terraform/modules/dns/`
-- [ ] Route 53 hosted zone created (domain name as variable)
-- [ ] ACM certificate requested with DNS validation
-- [ ] DNS validation records created in Route 53
-- [ ] Certificate validation completed (or uses `aws_acm_certificate_validation`)
-- [ ] Outputs: zone_id, zone_name_servers, certificate_arn
-- [ ] `terraform validate` passes
+- [x] Module in `terraform/modules/dns/`
+- [x] Route 53 hosted zone resolved (domain name as variable) — via `data "aws_route53_zone"`, not a resource: the zone already exists from domain registration, and creating a second one would put ACM validation records in the wrong zone
+- [x] ACM certificate requested with DNS validation — wildcard `*.{domain_name}`, covers both the dev and prod records
+- [x] DNS validation records created in Route 53
+- [x] Certificate validation completed (`aws_acm_certificate_validation`) — applied and validated in dev
+- [x] Outputs: zone_id, name_servers, certificate_arn
+- [x] `terraform validate` passes — dev and prod
 
 ---
 
@@ -943,13 +1002,13 @@ Install the AWS Load Balancer Controller on EKS using Helm (`aws-load-balancer-c
 **Technical Spec:** [DNS and Ingress](./technical-spec.md#dns-and-ingress), [IRSA Roles](./technical-spec.md#irsa-roles)
 
 **Acceptance Criteria:**
-- [ ] IAM policy for the LB controller created
-- [ ] IAM role for service account (IRSA) created using OIDC provider
-- [ ] Helm chart values file or install command generated for the LB controller
-- [ ] AWS Load Balancer Controller deployed to kube-system namespace via `helm install`
-- [ ] Controller pods running and healthy
-- [ ] IngressClass resource created for `alb`
-- [ ] Verified: controller can create ALBs (test with a simple Ingress)
+- [x] IAM policy for the LB controller created — vendored upstream kubernetes-sigs/aws-load-balancer-controller v2.8.1 IAM policy, in `terraform/modules/eks/policies/`
+- [x] IAM role for service account (IRSA) created using OIDC provider — `petclinic-{env}-lb-controller-role`, in `terraform/modules/eks/main.tf`
+- [x] Helm chart values file or install command generated for the LB controller — `scripts/install-lb-controller.sh`
+- [x] AWS Load Balancer Controller deployed to kube-system namespace via `helm install` — applied to dev
+- [x] Controller pods running and healthy — both replicas `1/1 Running` in dev (required fixing the install script: the chart's default EC2-instance-metadata VPC-ID lookup 401's from inside a pod's network namespace, crash-looping both pods until `--set vpcId` was passed explicitly)
+- [x] IngressClass resource created for `alb` — confirmed via `kubectl get ingressclass alb`
+- [x] Verified: controller can create ALBs (test with a simple Ingress) — a test Ingress in dev reconciled successfully and provisioned a real ALB
 
 ---
 
@@ -968,12 +1027,12 @@ Create the K8s Ingress resource that routes external HTTPS traffic to the API Ga
 **Technical Spec:** [DNS and Ingress](./technical-spec.md#dns-and-ingress)
 
 **Acceptance Criteria:**
-- [ ] Ingress manifest at `k8s/base/ingress/ingress.yaml`
-- [ ] Uses `alb` IngressClass
-- [ ] Annotations for internet-facing ALB, HTTPS redirect, ACM certificate ARN
-- [ ] Routes: `/` → api-gateway service on port 8080
-- [ ] Health check path: `/actuator/health`
-- [ ] ALB created and accessible after applying
+- [x] Ingress manifest at `k8s/base/ingress/ingress.yaml`
+- [x] Uses `alb` IngressClass — `spec.ingressClassName: alb` (modern field; the technical spec's example annotation predates it)
+- [x] Annotations for internet-facing ALB, HTTPS redirect, ACM certificate ARN — cert ARN is a documented literal placeholder in the committed file, substituted at apply time (never hardcoded — it changes every destroy/apply cycle)
+- [x] Routes: `/` → api-gateway service on port 8080
+- [x] Health check path: `/actuator/health`
+- [ ] ALB created and accessible after applying — ALB created and reconciled successfully in dev (verified with the real cert ARN patched in live), but "accessible" isn't fully verified: no `api-gateway` Service/namespace exist yet as real workloads (E-8), so the target group has no healthy targets
 
 ---
 
@@ -992,10 +1051,10 @@ Create a Route 53 A record (alias) pointing the domain to the ALB created by the
 **Technical Spec:** [DNS and Ingress](./technical-spec.md#dns-and-ingress)
 
 **Acceptance Criteria:**
-- [ ] Route 53 alias record created (e.g., petclinic-dev.example.com → ALB)
-- [ ] Record type: A with alias to ALB
-- [ ] App accessible via domain name over HTTPS
-- [ ] HTTP redirects to HTTPS
+- [x] Route 53 alias record created (`petclinic-dev.viralcoder.net` → ALB) — via a `data "aws_lb"` lookup keyed on the AWS Load Balancer Controller's own tags, gated behind `var.create_alb_alias_record` (default `false`, so `terraform plan` doesn't break before the ALB exists); flipped to `true` and applied in dev, confirmed via the `dns_record_fqdn` output
+- [x] Record type: A with alias to ALB
+- [ ] App accessible via domain name over HTTPS — not yet verifiable: no `api-gateway` Service exists (E-8), so the target group has no healthy targets
+- [ ] HTTP redirects to HTTPS — `ssl-redirect` annotation is in place but not yet traffic-tested end-to-end for the same reason
 
 ---
 
@@ -1014,10 +1073,10 @@ Call the DNS module from the dev environment.
 **Technical Spec:** [DNS and Ingress](./technical-spec.md#dns-and-ingress)
 
 **Acceptance Criteria:**
-- [ ] DNS module called in dev main.tf
-- [ ] Domain configured
-- [ ] ACM certificate created and validated
-- [ ] `terraform plan` shows expected resources
+- [x] DNS module called in dev main.tf — also wired into prod main.tf for symmetry (not applied to prod yet), matching how E-2/E-3/E-4 wired both envs together
+- [x] Domain configured — `domain_name = "viralcoder.net"` in both `terraform.tfvars`
+- [x] ACM certificate created and validated — applied and validated in dev
+- [x] `terraform plan` shows expected resources — verified for both dev and prod
 
 ---
 
@@ -2182,15 +2241,15 @@ Create ADRs for key architecture decisions made during the project.
 Create a CLAUDE.md in petclinic-platform that gives Claude Code full context about the infrastructure repo. This is the first file created — it establishes conventions before any infrastructure code is written.
 
 **Acceptance Criteria:**
-- [ ] `CLAUDE.md` at petclinic-platform root (< 200 lines)
-- [ ] Repo purpose and directory layout
-- [ ] Terraform conventions (module pattern, naming, state, tags)
-- [ ] K8s manifest conventions (labels, probes, resources, secrets)
-- [ ] Security rules (non-negotiable, 8 rules)
-- [ ] AWS environment details (dev vs prod table)
-- [ ] Application services table (8 services, ports, MySQL needs)
-- [ ] MCP servers documented
-- [ ] Does NOT duplicate workspace-level CLAUDE.md (app details)
+- [x] `CLAUDE.md` at petclinic-platform root (< 200 lines) — 168 lines
+- [x] Repo purpose and directory layout
+- [x] Terraform conventions (module pattern, naming, state, tags)
+- [x] K8s manifest conventions (labels, probes, resources, secrets)
+- [x] Security rules (non-negotiable, 8 rules)
+- [x] AWS environment details (dev vs prod table)
+- [x] Application services table (8 services, ports, MySQL needs)
+- [x] MCP servers documented
+- [x] Does NOT duplicate workspace-level CLAUDE.md (app details)
 
 ---
 

@@ -187,7 +187,7 @@ Four security groups per environment. Security groups are the **primary access c
 | Parameter | Dev | Prod |
 |-----------|-----|------|
 | Cluster Name | `petclinic-dev` | `petclinic-prod` |
-| Kubernetes Version | `1.29` | `1.29` |
+| Kubernetes Version | `1.34`[^k8s-version] | `1.34`[^k8s-version] |
 | API Server Endpoint | Public | Public |
 | Authentication Mode | `API_AND_CONFIG_MAP` | `API_AND_CONFIG_MAP` |
 | Cluster Logging | `api`, `audit`, `authenticator` | `api`, `audit`, `authenticator` |
@@ -215,9 +215,11 @@ Created from EKS cluster identity issuer URL. Required for IRSA (IAM Roles for S
 | Max Size | 4 | 4 |
 | Desired Size | 2 | 2 |
 | Disk Size | 20 GB | 20 GB |
-| AMI Type | `AL2_ARM_64` | `AL2_ARM_64` |
+| AMI Type | `AL2023_ARM_64_STANDARD`[^k8s-version] | `AL2023_ARM_64_STANDARD`[^k8s-version] |
 
 > **Cost note:** t4g.small instances (2 vCPU, 2 GiB) are eligible for the AWS Graviton free trial (750 hrs/month until Dec 2026). Both dev and prod use identical sizing — this is a cost optimization for a learning project. In production, you would use larger instances (e.g., m7g.xlarge). Students should understand this trade-off.
+
+[^k8s-version]: Deviation from an earlier draft of this spec, which pinned `1.29` / `AL2_ARM_64`. By implementation time (2026-09-19) EKS no longer offered 1.29 (`aws eks describe-cluster-versions` — oldest available was 1.31) and AL2-family AMIs are only published through 1.32, so `terraform apply` for PETPLAT-16 failed with `InvalidParameterException: unsupported Kubernetes version 1.29`. Moved to `1.34` (the newest version still in `STANDARD_SUPPORT`, avoiding EKS extended-support surcharges — see `aws eks describe-cluster-versions`) and `AL2023_ARM_64_STANDARD` (the only ARM64 AMI family AWS publishes for that version — verified via the `/aws/service/eks/optimized-ami/...` SSM parameters). Re-check both before reusing this spec much later, since AWS keeps moving the support window forward.
 
 ### Node IAM Role Policies
 
@@ -286,14 +288,28 @@ docker push {account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic-{env}/{servic
 
 ### Lifecycle Policies
 
+Two rules (PETPLAT-18/19): untagged images expire after 7 days, and only the 10 most recent tagged images are kept. ECR evaluates rules lowest priority number first.
+
 ```json
 {
   "rules": [
     {
       "rulePriority": 1,
-      "description": "Keep last 10 images",
+      "description": "Expire untagged images after 7 days",
       "selection": {
-        "tagStatus": "any",
+        "tagStatus": "untagged",
+        "countType": "sinceImagePushed",
+        "countUnit": "days",
+        "countNumber": 7
+      },
+      "action": { "type": "expire" }
+    },
+    {
+      "rulePriority": 2,
+      "description": "Keep only the last 10 tagged images",
+      "selection": {
+        "tagStatus": "tagged",
+        "tagPatternList": ["*"],
         "countType": "imageCountMoreThan",
         "countNumber": 10
       },
@@ -302,6 +318,8 @@ docker push {account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic-{env}/{servic
   ]
 }
 ```
+
+> An earlier draft of this spec had a single `tagStatus: any` "keep last 10" rule. It was split into the two rules above to match the PETPLAT-18/19 acceptance criteria — untagged layers (e.g. orphaned when a `MUTABLE` tag is re-pushed) now age out on their own schedule instead of counting toward the tagged-image cap.
 
 ### Cost
 
@@ -1050,12 +1068,22 @@ No NAT Gateway cost ($0 saved vs ~$35-65/mo with NAT).
 
 ### Build Command
 
+Maven builds only the JARs; `docker buildx` builds the images. The Maven `buildDocker` profile is **not** used (PETPLAT-85) — it shells out to a plain `docker build` for a single platform, and its `docker.image.exposed.port` values are unreliable (see warning below).
+
 ```bash
-# Build all 8 Docker images for ARM64 (required for t4g Graviton nodes)
-./mvnw clean install -P buildDocker -Dcontainer.platform="linux/arm64"
+# Build + push all 8 ARM64 images to ECR (initial push: semantic version tag)
+./scripts/ecr-login.sh                                  # ECR auth (also run by build-push.sh)
+./scripts/build-push.sh --env dev --tag v1.0.0
+
+# What it does, per service (run from the app repo root):
+./mvnw -B clean package -DskipTests                     # 1. JARs for all 8 modules
+mkdir ctx && cp spring-petclinic-customers-service/target/spring-petclinic-customers-service-*.jar ctx/app.jar
+docker buildx build --platform linux/arm64 --provenance=false --push \
+  -f docker/Dockerfile --build-arg ARTIFACT_NAME=app --build-arg EXPOSED_PORT=8081 \
+  -t {account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/customers-service:v1.0.0 ctx   # 2. ARM64 image → ECR
 ```
 
-> **Important:** EKS nodes are ARM64 (Graviton). All Docker images MUST be built for `linux/arm64`. The base image `eclipse-temurin:17` supports multi-arch. Local builds on Apple Silicon (M1/M2/M3) produce ARM images natively. CI/CD builds on x86 GitHub Actions runners require `docker buildx` with QEMU emulation (see [CI/CD Pipeline](#cicd-pipeline)).
+> **Important:** EKS nodes are ARM64 (Graviton). All Docker images MUST be built for `linux/arm64`. The base image `eclipse-temurin:17` supports multi-arch. Local builds on Apple Silicon (M1/M2/M3) produce ARM images natively; on an x86 host (or an x86 GitHub Actions runner) `docker buildx` needs QEMU emulation for arm64 — Docker Desktop includes it, otherwise `docker run --privileged --rm tonistiigi/binfmt --install arm64` (see [CI/CD Pipeline](#cicd-pipeline)). `--provenance=false` keeps each tag pointing at a single image manifest rather than an index plus attestation manifest, which would otherwise appear as extra untagged images in ECR.
 
 ### Dockerfile Details
 
@@ -1155,20 +1183,20 @@ Uses `aws_ecr_repository` with lifecycle policies, scan-on-push, and configurabl
 | Input Variable | Type | Description | Default |
 |---------------|------|-------------|---------|
 | `project` | string | Project name | `"petclinic"` |
-| `service_names` | list(string) | Service names for repos | — |
+| `environment` | string | Environment (dev/prod) | — |
+| `service_names` | list(string) | Service names, one repo each (`{project}-{env}/{service}`) | — |
+| `image_tag_mutability` | string | `MUTABLE` (dev) or `IMMUTABLE` (prod) | `"MUTABLE"` |
+| `max_tagged_image_count` | number | Tagged images kept per repo | `10` |
+| `untagged_image_expiry_days` | number | Days before an untagged image expires | `7` |
+| `force_delete` | bool | Let a teardown delete repos that still hold images (dev only) | `false` |
 | `tags` | map(string) | Additional tags | `{}` |
-
-| Output | Type | Description |
-|--------|------|-------------|
-| `environment` | string | Environment name | — |
-| `image_tag_mutability` | string | Tag mutability | `"MUTABLE"` |
 
 | Output | Type | Description |
 |--------|------|-------------|
 | `repository_urls` | map(string) | Map of service_name → ECR repository URL |
 | `repository_arns` | map(string) | Map of service_name → ECR repository ARN |
 
-> **Note:** ECR repos are created per environment (`petclinic-dev/`, `petclinic-prod/`). Tag mutability is MUTABLE for dev, IMMUTABLE for prod.
+> **Note:** ECR repos are created per environment (`petclinic-dev/`, `petclinic-prod/`). Tag mutability is MUTABLE for dev, IMMUTABLE for prod. Dev sets `force_delete = true` because dev is paused by tearing the environment down — with it, that teardown also deletes the dev images, so they must be re-pushed (`scripts/build-push.sh`) after the environment is rebuilt. Prod keeps the `false` default.
 
 ### Module: `rds`
 

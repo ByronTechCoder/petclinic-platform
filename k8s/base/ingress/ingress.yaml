@@ -1,0 +1,45 @@
+# Ingress for the API Gateway (PETPLAT-30) — the single external entry point;
+# all further routing to domain services happens inside Spring Cloud Gateway,
+# not here (technical-spec.md#dns-and-ingress).
+#
+# This is the *base* manifest (E-9 per-environment overlays don't exist yet):
+#   - namespace defaults to petclinic-dev; the prod overlay patches it to
+#     petclinic-prod once k8s/overlays/prod/ is built (PETPLAT-46).
+#   - alb.ingress.kubernetes.io/certificate-arn is a literal placeholder —
+#     substitute the real ACM ARN from `terraform output -raw dns_certificate_arn`
+#     (terraform/modules/dns) before/while applying. Left unsubstituted
+#     on purpose rather than hardcoding a value that would silently go stale.
+#
+# Requires: the AWS Load Balancer Controller installed first
+# (scripts/install-lb-controller.sh) and the petclinic-dev namespace to exist
+# (PETPLAT-38, E-8 — not yet built).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: petclinic-ingress
+  namespace: petclinic-dev
+  labels:
+    app.kubernetes.io/name: petclinic-ingress
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: gateway
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/certificate-arn: "{acm-certificate-arn}"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/healthcheck-path: /actuator/health
+    alb.ingress.kubernetes.io/healthcheck-port: "8080"
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8080
