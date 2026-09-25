@@ -3,3 +3,8 @@ environment = "dev"
 project     = "petclinic"
 
 domain_name = "example.com"
+
+# Sensitive — never set a real value here (this file IS committed). Leave
+# unset (defaults to "", fine since genai-service is optional/not yet
+# deployed) or pass a real key via: TF_VAR_openai_api_key="sk-..." terraform apply
+# openai_api_key = ""

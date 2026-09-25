@@ -11,6 +11,7 @@ locals {
 }
 
 data "aws_region" "current" {}
+data "aws_caller_identity" "current" {}
 
 # --- Cluster IAM role ---
 
@@ -421,4 +422,74 @@ resource "aws_iam_policy" "lb_controller" {
 resource "aws_iam_role_policy_attachment" "lb_controller" {
   role       = aws_iam_role.lb_controller.name
   policy_arn = aws_iam_policy.lb_controller.arn
+}
+
+# --- External Secrets Operator IRSA role (PETPLAT-37) ---
+# ESO itself is installed via Helm (scripts/install-eso.sh), not Terraform —
+# this only creates the IAM side of IRSA so its ServiceAccount can read
+# Secrets Manager. Scoped to secrets under petclinic/* only (least privilege,
+# tighter than PETPLAT-37's literal arn:aws:secretsmanager:*:*:secret:petclinic/*
+# — same intent, but this account/region are already known here). No
+# kms:Decrypt statement: all secrets here use the default AWS-managed
+# aws/secretsmanager key, whose resource policy already permits decryption
+# for principals holding secretsmanager:GetSecretValue — a custom KMS key
+# would need that grant, but nothing in this project uses one.
+
+data "aws_iam_policy_document" "eso_assume_role" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.eks.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub"
+      values   = ["system:serviceaccount:external-secrets:external-secrets-sa"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "eso" {
+  name               = "${local.name_prefix}-eso-role"
+  assume_role_policy = data.aws_iam_policy_document.eso_assume_role.json
+
+  tags = merge(var.tags, {
+    Name = "${local.name_prefix}-eso-role"
+  })
+}
+
+data "aws_iam_policy_document" "eso_secrets_read" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "secretsmanager:GetSecretValue",
+      "secretsmanager:DescribeSecret",
+    ]
+    resources = ["arn:aws:secretsmanager:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:secret:petclinic/*"]
+  }
+}
+
+resource "aws_iam_policy" "eso" {
+  name        = "${local.name_prefix}-eso-policy"
+  description = "Permissions for the External Secrets Operator to read petclinic/* secrets from Secrets Manager."
+  policy      = data.aws_iam_policy_document.eso_secrets_read.json
+
+  tags = merge(var.tags, {
+    Name = "${local.name_prefix}-eso-policy"
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "eso" {
+  role       = aws_iam_role.eso.name
+  policy_arn = aws_iam_policy.eso.arn
 }

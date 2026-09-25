@@ -1,0 +1,33 @@
+# ExternalSecret syncing the genai-service's OpenAI API key into K8s (PETPLAT-36).
+#
+# Base manifest (E-9 per-environment overlays don't exist yet): namespace
+# defaults to petclinic-dev, and remoteRef.key is hardcoded to the dev
+# secret name — the prod overlay patches both once k8s/overlays/prod/ is
+# built (PETPLAT-46), matching k8s/base/ingress/ingress.yaml's approach.
+#
+# Requires: the petclinic-dev namespace to exist (PETPLAT-38, E-8 — not yet
+# built) and the ClusterSecretStore in this file's sibling manifest applied.
+# The synced value is whatever terraform/modules/secrets' openai_api_key
+# variable was set to — empty by default until a real key is provided (see
+# terraform/environments/dev/variables.tf), since genai-service is optional.
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: openai-api-key
+  namespace: petclinic-dev
+  labels:
+    app.kubernetes.io/name: openai-api-key
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: Helm
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secrets-manager
+    kind: ClusterSecretStore
+  target:
+    name: openai-api-key
+    creationPolicy: Owner
+  data:
+    - secretKey: OPENAI_API_KEY
+      remoteRef:
+        key: petclinic/dev/openai-api-key

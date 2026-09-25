@@ -63,6 +63,11 @@ output "lb_controller_role_arn" {
   value       = aws_iam_role.lb_controller.arn
 }
 
+output "eso_role_arn" {
+  description = "ARN of the IRSA role for the External Secrets Operator's ServiceAccount (external-secrets/external-secrets-sa)"
+  value       = aws_iam_role.eso.arn
+}
+
 output "kubeconfig_command" {
   description = "Command to update local kubeconfig for this cluster"
   value       = "aws eks update-kubeconfig --name ${aws_eks_cluster.this.name} --region ${data.aws_region.current.name}"

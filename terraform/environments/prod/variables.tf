@@ -124,3 +124,10 @@ variable "create_alb_alias_record" {
   type        = bool
   default     = false
 }
+
+variable "openai_api_key" {
+  description = "OpenAI API key for the prod genai-service, stored in Secrets Manager by the secrets module. Never commit a real value — set via TF_VAR_openai_api_key. Defaults to empty since genai-service is optional and not yet deployed (E-8)."
+  type        = string
+  sensitive   = true
+  default     = ""
+}

@@ -19,3 +19,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "openai_api_key" {
+  description = "OpenAI API key value for the genai-service, stored in Secrets Manager. Never hardcode this — pass it via TF_VAR_openai_api_key or an untracked *.tfvars file."
+  type        = string
+  sensitive   = true
+}

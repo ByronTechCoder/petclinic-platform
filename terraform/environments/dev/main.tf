@@ -100,6 +100,15 @@ module "dns" {
   domain_name = var.domain_name
 }
 
+module "secrets" {
+  source = "../../modules/secrets"
+
+  project     = var.project
+  environment = var.environment
+
+  openai_api_key = var.openai_api_key
+}
+
 # --- ALB alias record (PETPLAT-31) ---
 # The AWS Load Balancer Controller (installed via scripts/install-lb-controller.sh,
 # see the eks module's lb_controller_role_arn output) provisions the ALB when

@@ -80,6 +80,11 @@ output "eks_lb_controller_role_arn" {
   value       = module.eks.lb_controller_role_arn
 }
 
+output "eks_eso_role_arn" {
+  description = "ARN of the dev IRSA role for the External Secrets Operator (pass to scripts/install-eso.sh)"
+  value       = module.eks.eso_role_arn
+}
+
 output "eks_kubeconfig_command" {
   description = "Command to update local kubeconfig for the dev EKS cluster"
   value       = module.eks.kubeconfig_command
@@ -138,4 +143,9 @@ output "dns_certificate_arn" {
 output "dns_record_fqdn" {
   description = "Dev DNS record created for the ALB, once create_alb_alias_record is true"
   value       = try(aws_route53_record.alb_alias[0].fqdn, null)
+}
+
+output "secrets_openai_secret_arn" {
+  description = "Secrets Manager ARN for the dev OpenAI API key"
+  value       = module.secrets.openai_secret_arn
 }
