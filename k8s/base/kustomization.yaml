@@ -1,0 +1,63 @@
+# Base Kustomization aggregating every k8s/base/ resource: the 8 app
+# services (E-8), plus the Ingress (E-6) and External Secrets (E-7) resources
+# built in earlier sessions. Consumed by k8s/overlays/{dev,prod}/, which
+# each set namespace/replicas/images/patches for their environment.
+#
+# namespaces.yaml is deliberately NOT listed here: Kustomize's `namespace:`
+# transformer (set by each overlay) renames Namespace-KIND resources'
+# metadata.name to match its target, not just other resources'
+# metadata.namespace. With both petclinic-dev and petclinic-prod defined in
+# one file and pulled through either overlay, both ends up renamed to the
+# SAME target and collide ("namespace transformation produces ID
+# conflict"). Apply namespaces.yaml on its own instead, once, outside either
+# overlay: `kubectl apply -f k8s/base/namespaces.yaml`.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+
+  - config-server/serviceaccount.yaml
+  - config-server/configmap.yaml
+  - config-server/service.yaml
+  - config-server/deployment.yaml
+
+  - discovery-server/serviceaccount.yaml
+  - discovery-server/configmap.yaml
+  - discovery-server/service.yaml
+  - discovery-server/deployment.yaml
+
+  - customers-service/serviceaccount.yaml
+  - customers-service/configmap.yaml
+  - customers-service/service.yaml
+  - customers-service/deployment.yaml
+
+  - visits-service/serviceaccount.yaml
+  - visits-service/configmap.yaml
+  - visits-service/service.yaml
+  - visits-service/deployment.yaml
+
+  - vets-service/serviceaccount.yaml
+  - vets-service/configmap.yaml
+  - vets-service/service.yaml
+  - vets-service/deployment.yaml
+
+  - genai-service/serviceaccount.yaml
+  - genai-service/configmap.yaml
+  - genai-service/service.yaml
+  - genai-service/deployment.yaml
+
+  - api-gateway/serviceaccount.yaml
+  - api-gateway/configmap.yaml
+  - api-gateway/service.yaml
+  - api-gateway/deployment.yaml
+
+  - admin-server/serviceaccount.yaml
+  - admin-server/configmap.yaml
+  - admin-server/service.yaml
+  - admin-server/deployment.yaml
+
+  - ingress/ingress.yaml
+
+  - external-secrets/cluster-secret-store.yaml
+  - external-secrets/rds-credentials.yaml
+  - external-secrets/openai-api-key.yaml

@@ -1,0 +1,58 @@
+# Dev overlay (PETPLAT-45). Per technical-spec.md#kubernetes-overlays:
+# namespace petclinic-dev, 1 replica per service, SHA-based image tags.
+#
+# Namespace and replicas here are the *documented* dev settings even where
+# they equal the base defaults (base is already 1-replica/petclinic-dev) —
+# listed explicitly so this file is the actual source of truth for dev
+# values, not an assumption about what the base happens to default to.
+# Resource requests/limits are NOT patched: technical-spec.md's sizing
+# table (100m/500m cpu, 128Mi/512Mi memory per service, 200m/1000m for
+# api-gateway) is already dev-appropriate and unchanged from base — no
+# separate "smaller for dev" numbers are specified anywhere.
+#
+# These settings are also what E-16's helm-values/dev.yaml will encode.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namespace: petclinic-dev
+
+replicas:
+  - name: config-server
+    count: 1
+  - name: discovery-server
+    count: 1
+  - name: customers-service
+    count: 1
+  - name: visits-service
+    count: 1
+  - name: vets-service
+    count: 1
+  - name: genai-service
+    count: 1
+  - name: api-gateway
+    count: 1
+  - name: admin-server
+    count: 1
+
+# Tag is a literal placeholder — PETPLAT-85 (image build/push) hasn't run
+# yet. CI substitutes the real commit SHA here once E-10 exists.
+images:
+  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/config-server
+    newTag: "{commit-sha}"
+  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/discovery-server
+    newTag: "{commit-sha}"
+  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/customers-service
+    newTag: "{commit-sha}"
+  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/visits-service
+    newTag: "{commit-sha}"
+  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/vets-service
+    newTag: "{commit-sha}"
+  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/genai-service
+    newTag: "{commit-sha}"
+  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/api-gateway
+    newTag: "{commit-sha}"
+  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/admin-server
+    newTag: "{commit-sha}"

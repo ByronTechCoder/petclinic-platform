@@ -1,0 +1,20 @@
+# Service name/port must match k8s/base/ingress/ingress.yaml's backend
+# (service.name: api-gateway, port 8080) — this is the Ingress target.
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: petclinic-dev
+  labels:
+    app.kubernetes.io/name: api-gateway
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: gateway
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: api-gateway
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

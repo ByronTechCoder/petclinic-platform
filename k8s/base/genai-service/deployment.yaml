@@ -1,0 +1,117 @@
+# GenAI Service (PETPLAT-42) — includes the `production` profile like
+# vets-service (docs/technical-spec.md#spring-profiles). MySQL is optional
+# for this service (technical-spec.md#service-inventory) and not wired here:
+# it has JPA + MySQL dependencies but ships no schema files, so there's
+# nothing for it to connect to yet.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: genai-service
+  namespace: petclinic-dev
+  labels:
+    app.kubernetes.io/name: genai-service
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: genai-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: genai-service
+        app.kubernetes.io/part-of: petclinic
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/component: service
+    spec:
+      serviceAccountName: genai-service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: wait-for-config-server
+          image: busybox:1.36
+          command: ['sh', '-c', 'until wget -qO- http://config-server:8888/actuator/health; do sleep 5; done']
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: false
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
+        - name: wait-for-discovery-server
+          image: busybox:1.36
+          command: ['sh', '-c', 'until wget -qO- http://discovery-server:8761/actuator/health; do sleep 5; done']
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: false
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
+      containers:
+        - name: genai-service
+          image: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/genai-service:placeholder
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8084
+          envFrom:
+            - configMapRef:
+                name: genai-service-config
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "docker,production"
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openai-api-key
+                  key: OPENAI_API_KEY
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: false
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8084
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8084
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8084
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3

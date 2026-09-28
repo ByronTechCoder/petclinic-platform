@@ -1,0 +1,29 @@
+# Namespaces for both environments (PETPLAT-38).
+#
+# Both are defined here rather than split per-overlay — harmless and simple
+# for either overlay to include: `kubectl apply` on a Namespace that already
+# exists is a no-op. Pod Security Admission uses `baseline` for enforce
+# (blocking anything that would violate the securityContext every Deployment
+# in this repo already sets) and `restricted` for warn/audit, per
+# technical-spec.md#namespaces.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: petclinic-dev
+  labels:
+    app.kubernetes.io/part-of: petclinic
+    environment: dev
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: petclinic-prod
+  labels:
+    app.kubernetes.io/part-of: petclinic
+    environment: prod
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted

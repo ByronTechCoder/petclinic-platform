@@ -1,0 +1,19 @@
+# SPRING_DATASOURCE_URL's {rds-endpoint} is a literal placeholder — substitute
+# the real value from `terraform output -raw rds_endpoint` (terraform/modules/rds)
+# before/while applying. Left unsubstituted on purpose (matches
+# k8s/base/ingress/ingress.yaml's certificate-arn placeholder): the endpoint's
+# subdomain is AWS-generated and changes on every terraform destroy/apply
+# cycle, so hardcoding a real value here would go stale immediately.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: customers-service-config
+  namespace: petclinic-dev
+  labels:
+    app.kubernetes.io/name: customers-service
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: service
+data:
+  CONFIG_SERVER_URL: "http://config-server:8888"
+  SPRING_DATASOURCE_URL: "jdbc:mysql://{rds-endpoint}:3306/petclinic"

@@ -1,0 +1,15 @@
+# SPRING_DATASOURCE_URL's {rds-endpoint} is a literal placeholder — see
+# customers-service/configmap.yaml for why it isn't a real value here.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vets-service-config
+  namespace: petclinic-dev
+  labels:
+    app.kubernetes.io/name: vets-service
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: service
+data:
+  CONFIG_SERVER_URL: "http://config-server:8888"
+  SPRING_DATASOURCE_URL: "jdbc:mysql://{rds-endpoint}:3306/petclinic"
