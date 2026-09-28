@@ -10,7 +10,7 @@
 # The synced value is whatever terraform/modules/secrets' openai_api_key
 # variable was set to — empty by default until a real key is provided (see
 # terraform/environments/dev/variables.tf), since genai-service is optional.
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: openai-api-key

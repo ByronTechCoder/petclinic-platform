@@ -24,6 +24,14 @@ resource "aws_secretsmanager_secret" "openai_api_key" {
 }
 
 resource "aws_secretsmanager_secret_version" "openai_api_key" {
+  # Secrets Manager's PutSecretValue rejects an empty SecretString outright
+  # ("You must provide either SecretString or SecretBinary"), so an empty
+  # var.openai_api_key (its default — genai-service is optional and not
+  # deployed yet, see variables.tf) can't produce a version at all. Skip
+  # creating one until a real key is set; the secret container itself (with
+  # its stable ARN) still gets created either way.
+  count = var.openai_api_key != "" ? 1 : 0
+
   secret_id     = aws_secretsmanager_secret.openai_api_key.id
   secret_string = var.openai_api_key
 }
