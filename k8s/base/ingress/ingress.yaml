@@ -2,17 +2,28 @@
 # all further routing to domain services happens inside Spring Cloud Gateway,
 # not here (technical-spec.md#dns-and-ingress).
 #
-# This is the *base* manifest (E-9 per-environment overlays don't exist yet):
-#   - namespace defaults to petclinic-dev; the prod overlay patches it to
-#     petclinic-prod once k8s/overlays/prod/ is built (PETPLAT-46).
-#   - alb.ingress.kubernetes.io/certificate-arn is a literal placeholder —
-#     substitute the real ACM ARN from `terraform output -raw dns_certificate_arn`
-#     (terraform/modules/dns) before/while applying. Left unsubstituted
-#     on purpose rather than hardcoding a value that would silently go stale.
+# This is the *base* manifest — namespace/cert-arn/security-groups here are
+# dev-flavored defaults; k8s/overlays/{dev,prod}/kustomization.yaml patches
+# the real per-environment values (namespace via Kustomize's transformer;
+# certificate-arn and security-groups via explicit patches, since both
+# change on every terraform destroy/apply cycle in this project and would
+# go stale immediately if hardcoded here).
+#
+# alb.ingress.kubernetes.io/security-groups is NOT optional: without it, the
+# AWS Load Balancer Controller auto-creates its own security groups for the
+# ALB instead of using the Terraform-managed one (vpc module's `alb` SG,
+# output as `alb_sg_id`) that the EKS node security group actually trusts.
+# That mismatch makes every target fail its health check with
+# Target.Timeout (traffic gets dropped at the node SG boundary) — hit and
+# fixed live during PETPLAT-48 dev verification. It also recreates the
+# exact orphaned-security-group risk from an earlier session: those
+# auto-created SGs aren't cleaned up if the ALB is ever deleted directly via
+# the AWS API instead of through `kubectl delete ingress`, and orphaned SGs
+# then block the next `terraform destroy` on the VPC.
 #
 # Requires: the AWS Load Balancer Controller installed first
-# (scripts/install-lb-controller.sh) and the petclinic-dev namespace to exist
-# (PETPLAT-38, E-8 — not yet built).
+# (scripts/install-lb-controller.sh) and the petclinic-{env} namespace to
+# exist (k8s/base/namespaces.yaml).
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -27,6 +38,7 @@ metadata:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/certificate-arn: "{acm-certificate-arn}"
+    alb.ingress.kubernetes.io/security-groups: "{alb-security-group-id}"
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
     alb.ingress.kubernetes.io/ssl-redirect: "443"
     alb.ingress.kubernetes.io/healthcheck-path: /actuator/health

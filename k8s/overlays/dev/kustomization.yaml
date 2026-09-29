@@ -90,3 +90,22 @@ patches:
       - op: replace
         path: /data/SPRING_DATASOURCE_URL
         value: jdbc:mysql://petclinic-dev-mysql.cp8ue2qe0x9i.eu-central-1.rds.amazonaws.com:3306/petclinic
+
+  # Same story as the RDS endpoint above: both values are Terraform-generated
+  # and change on every destroy/apply cycle. certificate-arn: re-fetch with
+  # `terraform output -raw dns_certificate_arn`. security-groups: re-fetch
+  # with `terraform output -raw alb_sg_id` — see
+  # k8s/base/ingress/ingress.yaml's comment for why this annotation matters
+  # (without it, the AWS Load Balancer Controller auto-creates its own SGs,
+  # which then can't pass health checks through the node SG, and orphan on
+  # manual ALB deletion).
+  - target:
+      kind: Ingress
+      name: petclinic-ingress
+    patch: |-
+      - op: replace
+        path: /metadata/annotations/alb.ingress.kubernetes.io~1certificate-arn
+        value: arn:aws:acm:eu-central-1:771174261648:certificate/5cdde40c-ad93-43ec-a29c-7bfb25180703
+      - op: replace
+        path: /metadata/annotations/alb.ingress.kubernetes.io~1security-groups
+        value: sg-0585fdf170e2e202e
