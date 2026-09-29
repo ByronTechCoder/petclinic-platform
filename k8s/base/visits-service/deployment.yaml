@@ -1,6 +1,17 @@
 # Visits Service (PETPLAT-41) — MySQL-backed, deployed after Customers
 # (FK dependency on the customers/owners schema — see
-# docs/technical-spec.md#schema-initialization-order).
+# docs/technical-spec.md#schema-initialization-order and
+# docs/database-initialization.md#initialization-order).
+#
+# The third init container below closes a real race: visits-service's
+# schema.sql has `FOREIGN KEY (pet_id) REFERENCES pets(id)`, and `pets` is
+# created by customers-service's own schema.sql. Without waiting on
+# customers-service specifically, both services' schema init can run
+# concurrently (each is only gated on config-server/discovery-server), and
+# visits-service crashes with "Failed to open the referenced table 'pets'"
+# if it wins the race. Observed live during PETPLAT-48 dev verification —
+# it happened to recover via Kubernetes' automatic pod restart once
+# customers-service caught up, but that's incidental timing, not a fix.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -50,6 +61,21 @@ spec:
         - name: wait-for-discovery-server
           image: busybox:1.36
           command: ['sh', '-c', 'until wget -qO- http://discovery-server:8761/actuator/health; do sleep 5; done']
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: false
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
+        - name: wait-for-customers-service
+          image: busybox:1.36
+          command: ['sh', '-c', 'until wget -qO- http://customers-service:8081/actuator/health; do sleep 5; done']
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

@@ -1,6 +1,6 @@
 # Database Initialization Strategy
 
-**Last Updated:** 2026-09-22
+**Last Updated:** 2026-09-29
 **Purpose:** Documents how the shared `petclinic` MySQL database on RDS gets its schema created by the three database-backed services, and the connection string format those services (and their K8s ConfigMaps) need to use.
 
 ## Table of Contents
@@ -18,7 +18,7 @@
 
 Each of the three database-backed services ships its own `schema.sql` (and `data.sql`) under `src/main/resources/db/mysql/` in the (read-only) `spring-petclinic-microservices` repo. With the `mysql` Spring profile active and `spring.sql.init.mode=always` set, Spring Boot runs that service's `schema.sql` against the configured datasource on every pod startup. The statements are idempotent (`CREATE DATABASE IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS`), so re-running them on every restart is safe and self-healing — no separate migration/versioning tool is needed for this project's scope.
 
-There is no cross-service schema coordinator. Ordering (below) is enforced entirely by **Kubernetes deployment order** — an init container per CLAUDE.md's "Service startup order" convention (Config Server → Discovery Server → all others) will additionally gate visits-service on customers-service being Ready, once E-8 (Kubernetes Manifests — Base) implements it. That K8s wiring is out of scope for this RDS-focused pass (E-5) and not yet built.
+There is no cross-service schema coordinator. Ordering (below) is enforced entirely by **Kubernetes deployment order**: every service has init containers per CLAUDE.md's "Service startup order" convention (Config Server → Discovery Server → all others), and visits-service additionally has a third init container gating it on customers-service being Ready — `k8s/base/visits-service/deployment.yaml`'s `wait-for-customers-service`, implemented in E-8 (2026-09-29) after this exact race condition was observed live during PETPLAT-48 dev verification: without it, visits-service's schema.sql occasionally lost the race against customers-service's and crashed with "Failed to open the referenced table 'pets'" (it happened to recover via Kubernetes' automatic pod restart once, but that was incidental timing, not something to rely on).
 
 ## Shared Database
 
@@ -56,4 +56,4 @@ Credentials (`username`/`password`) come from AWS Secrets Manager (`petclinic/{e
 
 ## Verification Status
 
-**Not yet tested.** Verifying that "services can connect and tables exist" requires customers-service (and the other two) to actually run against RDS, which requires E-8 (K8s base manifests), E-16 (Helm chart), and E-17 (ArgoCD) — none of which exist yet. This is tracked as open work, not a gap in this ticket: once customers-service is first deployed to dev, verify via `kubectl logs` (Hibernate/`schema.sql` startup output) or by exec-ing a MySQL client pod and running `SHOW TABLES;` against the dev RDS endpoint.
+**Verified live in dev (2026-09-29, PETPLAT-48).** All three services reached `Running`/`Ready` in `petclinic-dev` against the real RDS instance — customers-service and vets-service came up clean on the first attempt; visits-service crashed once with exactly the FK race predicted above (`Failed to open the referenced table 'pets'`) before the `wait-for-customers-service` init container existed, then came up clean after it was added. Not yet independently confirmed via `SHOW TABLES;` against the RDS endpoint directly (exec-ing a plain verification pod has previously been denied by the Claude Code auto-mode permission classifier under "Secret-Store Writes" — see PETPLAT-26's note in `docs/jira-backlog.md`) — the pods' own healthy/Ready state after running their `schema.sql` is the evidence here.
