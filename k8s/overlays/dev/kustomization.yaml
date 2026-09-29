@@ -37,22 +37,56 @@ replicas:
   - name: admin-server
     count: 1
 
-# Tag is a literal placeholder — PETPLAT-85 (image build/push) hasn't run
-# yet. CI substitutes the real commit SHA here once E-10 exists.
+# v1.0.0 images are built locally but NOT YET pushed to ECR as of this
+# writing — pods will ImagePullBackOff until `scripts/build-push.sh` (or
+# equivalent) actually pushes them. Once E-10/CI exists, CI will bump this
+# tag automatically instead of it being hand-edited.
 images:
   - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/config-server
-    newTag: "{commit-sha}"
+    newTag: v1.0.0
   - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/discovery-server
-    newTag: "{commit-sha}"
+    newTag: v1.0.0
   - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/customers-service
-    newTag: "{commit-sha}"
+    newTag: v1.0.0
   - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/visits-service
-    newTag: "{commit-sha}"
+    newTag: v1.0.0
   - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/vets-service
-    newTag: "{commit-sha}"
+    newTag: v1.0.0
   - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/genai-service
-    newTag: "{commit-sha}"
+    newTag: v1.0.0
   - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/api-gateway
-    newTag: "{commit-sha}"
+    newTag: v1.0.0
   - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/admin-server
-    newTag: "{commit-sha}"
+    newTag: v1.0.0
+
+# The RDS endpoint is AWS-generated and changes on every terraform
+# destroy/apply cycle (this project tears its environment down daily to
+# control cost — see docs/jira-backlog.md's Current Status notes), so it
+# can't live in k8s/base/*/configmap.yaml without going stale immediately.
+# Patched here instead, at the overlay that actually represents "today's
+# real dev deployment." Current value as of this writing (re-fetch with
+# `terraform output -raw rds_endpoint` in terraform/environments/dev after
+# every re-apply):
+#   petclinic-dev-mysql.cp8ue2qe0x9i.eu-central-1.rds.amazonaws.com
+patches:
+  - target:
+      kind: ConfigMap
+      name: customers-service-config
+    patch: |-
+      - op: replace
+        path: /data/SPRING_DATASOURCE_URL
+        value: jdbc:mysql://petclinic-dev-mysql.cp8ue2qe0x9i.eu-central-1.rds.amazonaws.com:3306/petclinic
+  - target:
+      kind: ConfigMap
+      name: visits-service-config
+    patch: |-
+      - op: replace
+        path: /data/SPRING_DATASOURCE_URL
+        value: jdbc:mysql://petclinic-dev-mysql.cp8ue2qe0x9i.eu-central-1.rds.amazonaws.com:3306/petclinic
+  - target:
+      kind: ConfigMap
+      name: vets-service-config
+    patch: |-
+      - op: replace
+        path: /data/SPRING_DATASOURCE_URL
+        value: jdbc:mysql://petclinic-dev-mysql.cp8ue2qe0x9i.eu-central-1.rds.amazonaws.com:3306/petclinic

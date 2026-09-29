@@ -37,33 +37,35 @@ replicas:
     count: 1
 
 # Both name (petclinic-dev -> petclinic-prod repo) and tag change here,
-# unlike the dev overlay. Tag is a literal placeholder — see dev's
-# kustomization.yaml for why.
+# unlike the dev overlay. v1.0.0 images aren't pushed to the petclinic-prod
+# ECR repos yet either — moot for now since prod infra itself hasn't been
+# terraform-applied (no cluster to deploy into), but kept in sync with dev's
+# version number.
 images:
   - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/config-server
     newName: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/config-server
-    newTag: "{commit-sha}"
+    newTag: v1.0.0
   - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/discovery-server
     newName: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/discovery-server
-    newTag: "{commit-sha}"
+    newTag: v1.0.0
   - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/customers-service
     newName: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/customers-service
-    newTag: "{commit-sha}"
+    newTag: v1.0.0
   - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/visits-service
     newName: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/visits-service
-    newTag: "{commit-sha}"
+    newTag: v1.0.0
   - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/vets-service
     newName: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/vets-service
-    newTag: "{commit-sha}"
+    newTag: v1.0.0
   - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/genai-service
     newName: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/genai-service
-    newTag: "{commit-sha}"
+    newTag: v1.0.0
   - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/api-gateway
     newName: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/api-gateway
-    newTag: "{commit-sha}"
+    newTag: v1.0.0
   - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/admin-server
     newName: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/admin-server
-    newTag: "{commit-sha}"
+    newTag: v1.0.0
 
 # The namespace transformer above handles metadata.namespace on the two
 # ExternalSecrets automatically, but not their spec.data[].remoteRef.key
