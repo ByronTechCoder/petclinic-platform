@@ -1,0 +1,52 @@
+# Vets Service (PETPLAT-108) — MySQL-backed. Includes the `production`
+# profile: vets-service's CacheConfig class is gated on @Profile("production")
+# (docs/technical-spec.md#spring-profiles) — without it, the Caffeine cache
+# silently never activates.
+#
+# SPRING_DATASOURCE_URL placeholder handling and the rds-credentials secret
+# reference are identical to customers-service.yaml — see that file's
+# comment for how to substitute the real RDS endpoint at install time.
+#
+# replicaCount/autoscaling/podDisruptionBudget below are prod-shaped
+# (matching k8s/overlays/prod + hpa.yaml exactly) — helm-values/dev.yaml
+# forces them back down uniformly for dev.
+
+image:
+  repositorySuffix: vets-service
+
+component: service
+
+service:
+  port: 8083
+
+springProfilesActive: docker,mysql,production
+
+configMap:
+  CONFIG_SERVER_URL: "http://config-server:8888"
+  SPRING_DATASOURCE_URL: "jdbc:mysql://{rds-endpoint}:3306/petclinic"
+
+secretEnv:
+  - name: SPRING_DATASOURCE_USERNAME
+    secretName: rds-credentials
+    secretKey: username
+  - name: SPRING_DATASOURCE_PASSWORD
+    secretName: rds-credentials
+    secretKey: password
+
+initContainers:
+  - name: wait-for-config-server
+    url: http://config-server:8888/actuator/health
+  - name: wait-for-discovery-server
+    url: http://discovery-server:8761/actuator/health
+
+replicaCount: 2 # prod value (technical-spec.md#kubernetes-overlays, Prod Overlay table)
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

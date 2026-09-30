@@ -1,0 +1,120 @@
+# Defaults common to all 8 Petclinic services. Overridden by, in merge order
+# (later files win on scalar keys; the deploy command is
+# `helm upgrade --install {service} helm/petclinic-service/ -n petclinic-{env}
+#   -f helm-values/{service}.yaml -f helm-values/{env}.yaml`):
+#   this file  <  helm-values/{service}.yaml  <  helm-values/{env}.yaml  <  --set
+#
+# This schema intentionally does NOT match technical-spec.md's illustrative
+# values.yaml example key-for-key (e.g. it has no probes.readiness.initialDelaySeconds).
+# Per this chart's own acceptance criteria, k8s/base/ and k8s/overlays/ are the
+# source of truth for what the rendered output must equal — those use a
+# startupProbe (periodSeconds/timeoutSeconds/failureThreshold, no
+# initialDelaySeconds at all) precisely so Spring Boot's startup time doesn't
+# need to be guessed via initialDelaySeconds; this chart matches that, not the
+# doc's simplified illustration.
+
+nameOverride: ""
+
+replicaCount: 1
+
+image:
+  registry: "" # Set per-environment (helm-values/{dev,prod}.yaml): {account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic-{env}
+  repositorySuffix: "" # Set per-service (helm-values/{service}.yaml): the service name, e.g. "customers-service"
+  tag: placeholder # No real tag until pushed to ECR (scripts/build-push.sh) — matches k8s/base's convention. Override with --set image.tag=<sha> in CI.
+  pullPolicy: Always
+
+# One of: server | service | gateway | admin — becomes app.kubernetes.io/component.
+component: service
+
+serviceAccount:
+  create: true
+  annotations: {}
+
+service:
+  port: 8080 # Overridden per-service — containerPort always equals this (every service here is single-port)
+
+springProfilesActive: docker
+
+# Extra non-secret env vars, merged into this release's ConfigMap (envFrom).
+# e.g. CONFIG_SERVER_URL, DISCOVERY_SERVER_URL, GIT_REPO, SPRING_DATASOURCE_URL.
+configMap: {}
+
+# Secret-sourced env vars — name/secretName/secretKey must match an existing
+# K8s Secret (synced by External Secrets Operator from AWS Secrets Manager;
+# see k8s/base/external-secrets/). Example:
+#   - name: SPRING_DATASOURCE_USERNAME
+#     secretName: rds-credentials
+#     secretKey: username
+secretEnv: []
+
+# Extra plain env vars beyond springProfilesActive, e.g. [{name: X, value: Y}].
+env: []
+
+# Wait-for-dependency init containers (busybox:1.36 wget loop against the
+# given URL's /actuator/health). Example:
+#   - name: wait-for-config-server
+#     url: http://config-server:8888/actuator/health
+initContainers: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Applied to every init container (all of them are the same lightweight
+# busybox wget loop, so one shared sizing covers all of them).
+initContainerResources:
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    cpu: 50m
+    memory: 32Mi
+
+probes:
+  startup:
+    path: /actuator/health
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30
+  readiness:
+    path: /actuator/health/readiness
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  liveness:
+    path: /actuator/health/liveness
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+  readOnlyRootFilesystem: false # Spring Boot needs /tmp for file uploads and caching
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+# Optional. If unset, every template uses .Release.Namespace (the `-n` flag
+# on `helm install`/`upgrade`) instead — this is a safety net, not the
+# primary mechanism; helm-values/{dev,prod}.yaml set it explicitly anyway.
+namespace: ""

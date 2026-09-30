@@ -1,71 +1,18 @@
-# Prod overlay (PETPLAT-46). Per technical-spec.md#kubernetes-overlays:
-# namespace petclinic-prod, replicas per the prod table, SHA/release-tagged
-# images from the petclinic-prod ECR repos.
-#
-# Resource requests/limits are NOT bumped here: PETPLAT-46's "increased
-# where appropriate" isn't backed by any specific numbers in
-# technical-spec.md's resource table (which is environment-agnostic) — left
-# as a documented open decision for E-16 Helm values / real ops tuning,
-# rather than inventing unspecified figures.
-#
-# These settings are also what E-16's helm-values/prod.yaml will encode.
+# Prod overlay — now scoped to the shared/cross-cutting resources only
+# (Ingress + External Secrets). The 8 services' replica counts, HPAs,
+# image tags/registries, and prod-specific settings moved to
+# helm-values/{service}.yaml + helm-values/prod.yaml (E-16) — deploy those
+# with `helm upgrade --install {service} helm/petclinic-service/ ...`, not
+# through this kustomization. See docs/helm-guide.md. (hpa.yaml, which used
+# to live in this directory, is deleted — the Helm chart's own
+# templates/hpa.yaml now owns per-service HPA definitions.)
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
   - ../../base
-  - hpa.yaml
 
 namespace: petclinic-prod
-
-replicas:
-  - name: config-server
-    count: 2
-  - name: discovery-server
-    count: 2
-  - name: customers-service
-    count: 2
-  - name: visits-service
-    count: 2
-  - name: vets-service
-    count: 2
-  - name: genai-service
-    count: 1
-  - name: api-gateway
-    count: 2
-  - name: admin-server
-    count: 1
-
-# Both name (petclinic-dev -> petclinic-prod repo) and tag change here,
-# unlike the dev overlay. v1.0.0 images aren't pushed to the petclinic-prod
-# ECR repos yet either — moot for now since prod infra itself hasn't been
-# terraform-applied (no cluster to deploy into), but kept in sync with dev's
-# version number.
-images:
-  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/config-server
-    newName: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/config-server
-    newTag: v1.0.0
-  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/discovery-server
-    newName: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/discovery-server
-    newTag: v1.0.0
-  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/customers-service
-    newName: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/customers-service
-    newTag: v1.0.0
-  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/visits-service
-    newName: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/visits-service
-    newTag: v1.0.0
-  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/vets-service
-    newName: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/vets-service
-    newTag: v1.0.0
-  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/genai-service
-    newName: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/genai-service
-    newTag: v1.0.0
-  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/api-gateway
-    newName: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/api-gateway
-    newTag: v1.0.0
-  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/admin-server
-    newName: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod/admin-server
-    newTag: v1.0.0
 
 # The namespace transformer above handles metadata.namespace on the two
 # ExternalSecrets automatically, but not their spec.data[].remoteRef.key

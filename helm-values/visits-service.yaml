@@ -1,0 +1,55 @@
+# Visits Service (PETPLAT-108) — MySQL-backed, deployed after Customers
+# (FK dependency on the customers/owners schema — see
+# docs/database-initialization.md#initialization-order). The third init
+# container closes a real race hit live during PETPLAT-48 dev verification:
+# see k8s/base/visits-service/deployment.yaml's comment for the full story.
+#
+# SPRING_DATASOURCE_URL placeholder handling and the rds-credentials secret
+# reference are identical to customers-service.yaml — see that file's
+# comment for how to substitute the real RDS endpoint at install time.
+#
+# replicaCount/autoscaling/podDisruptionBudget below are prod-shaped
+# (matching k8s/overlays/prod + hpa.yaml exactly) — helm-values/dev.yaml
+# forces them back down uniformly for dev.
+
+image:
+  repositorySuffix: visits-service
+
+component: service
+
+service:
+  port: 8082
+
+springProfilesActive: docker,mysql
+
+configMap:
+  CONFIG_SERVER_URL: "http://config-server:8888"
+  SPRING_DATASOURCE_URL: "jdbc:mysql://{rds-endpoint}:3306/petclinic"
+
+secretEnv:
+  - name: SPRING_DATASOURCE_USERNAME
+    secretName: rds-credentials
+    secretKey: username
+  - name: SPRING_DATASOURCE_PASSWORD
+    secretName: rds-credentials
+    secretKey: password
+
+initContainers:
+  - name: wait-for-config-server
+    url: http://config-server:8888/actuator/health
+  - name: wait-for-discovery-server
+    url: http://discovery-server:8761/actuator/health
+  - name: wait-for-customers-service
+    url: http://customers-service:8081/actuator/health
+
+replicaCount: 2 # prod value (technical-spec.md#kubernetes-overlays, Prod Overlay table)
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

@@ -1,0 +1,29 @@
+# Discovery Server / Eureka (PETPLAT-108) — depends only on Config Server
+# (it IS the discovery mechanism, so it can't wait on itself). Every other
+# service's init container waits on this one.
+#
+# replicaCount/podDisruptionBudget below are prod-shaped (matching
+# k8s/overlays/prod exactly) — helm-values/dev.yaml forces them back down
+# uniformly for dev. No autoscaling block: discovery-server isn't in
+# technical-spec.md's HPA table, so it never gets one in either env.
+
+image:
+  repositorySuffix: discovery-server
+
+component: server
+
+service:
+  port: 8761
+
+configMap:
+  CONFIG_SERVER_URL: "http://config-server:8888"
+
+initContainers:
+  - name: wait-for-config-server
+    url: http://config-server:8888/actuator/health
+
+replicaCount: 2 # prod value (technical-spec.md#kubernetes-overlays, Prod Overlay table)
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

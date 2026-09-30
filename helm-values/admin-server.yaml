@@ -1,0 +1,25 @@
+# Admin Server (PETPLAT-108) — Spring Boot Admin dashboard for monitoring
+# all services. Lowest priority in the original E-8 epic; single replica
+# is sufficient in both environments.
+#
+# No autoscaling or podDisruptionBudget block: admin-server isn't in
+# technical-spec.md's HPA or PDB tables — replicaCount stays at the chart
+# default (1) in both dev and prod, so there's nothing for
+# helm-values/{dev,prod}.yaml to override here.
+
+image:
+  repositorySuffix: admin-server
+
+component: admin
+
+service:
+  port: 9090
+
+configMap:
+  CONFIG_SERVER_URL: "http://config-server:8888"
+
+initContainers:
+  - name: wait-for-config-server
+    url: http://config-server:8888/actuator/health
+  - name: wait-for-discovery-server
+    url: http://discovery-server:8761/actuator/health

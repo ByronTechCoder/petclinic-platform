@@ -1,0 +1,31 @@
+# Dev environment overrides (PETPLAT-109). Per technical-spec.md#kubernetes-overlays
+# and k8s/overlays/dev/kustomization.yaml: namespace petclinic-dev, 1 replica
+# per service, no HPA, no PDB.
+#
+# Deploy: helm upgrade --install {service} helm/petclinic-service/ \
+#   -n petclinic-dev -f helm-values/{service}.yaml -f helm-values/dev.yaml
+#
+# replicaCount/autoscaling.enabled/podDisruptionBudget.enabled here are
+# blanket overrides that win over EVERY per-service file's prod-shaped
+# defaults (helm-values/{service}.yaml sets replicaCount/autoscaling/PDB to
+# that service's PRODUCTION values, since dev is the exception, not prod —
+# see e.g. helm-values/api-gateway.yaml). This file is loaded last in the
+# -f order above, so these three keys always win regardless of what any
+# service file says. Nothing else is overridden here: resource
+# requests/limits are already dev-appropriate in the chart defaults /
+# per-service files (technical-spec.md's sizing table is environment-
+# agnostic — see k8s/overlays/dev/kustomization.yaml's identical reasoning).
+
+namespace: petclinic-dev
+
+image:
+  registry: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev
+  tag: v1.0.0 # Matches k8s/overlays/dev's current tag. Real deployments should override with --set image.tag=<sha> once CI (E-10) exists.
+
+replicaCount: 1
+
+autoscaling:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: false

@@ -1,16 +1,9 @@
-# Dev overlay (PETPLAT-45). Per technical-spec.md#kubernetes-overlays:
-# namespace petclinic-dev, 1 replica per service, SHA-based image tags.
-#
-# Namespace and replicas here are the *documented* dev settings even where
-# they equal the base defaults (base is already 1-replica/petclinic-dev) —
-# listed explicitly so this file is the actual source of truth for dev
-# values, not an assumption about what the base happens to default to.
-# Resource requests/limits are NOT patched: technical-spec.md's sizing
-# table (100m/500m cpu, 128Mi/512Mi memory per service, 200m/1000m for
-# api-gateway) is already dev-appropriate and unchanged from base — no
-# separate "smaller for dev" numbers are specified anywhere.
-#
-# These settings are also what E-16's helm-values/dev.yaml will encode.
+# Dev overlay — now scoped to the shared/cross-cutting resources only
+# (Ingress + External Secrets). The 8 services' replica counts, image
+# tags/registries, and SPRING_DATASOURCE_URL patches moved to
+# helm-values/{service}.yaml + helm-values/dev.yaml (E-16) — deploy those
+# with `helm upgrade --install {service} helm/petclinic-service/ ...`, not
+# through this kustomization. See docs/helm-guide.md.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -19,86 +12,15 @@ resources:
 
 namespace: petclinic-dev
 
-replicas:
-  - name: config-server
-    count: 1
-  - name: discovery-server
-    count: 1
-  - name: customers-service
-    count: 1
-  - name: visits-service
-    count: 1
-  - name: vets-service
-    count: 1
-  - name: genai-service
-    count: 1
-  - name: api-gateway
-    count: 1
-  - name: admin-server
-    count: 1
-
-# v1.0.0 images are built locally but NOT YET pushed to ECR as of this
-# writing — pods will ImagePullBackOff until `scripts/build-push.sh` (or
-# equivalent) actually pushes them. Once E-10/CI exists, CI will bump this
-# tag automatically instead of it being hand-edited.
-images:
-  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/config-server
-    newTag: v1.0.0
-  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/discovery-server
-    newTag: v1.0.0
-  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/customers-service
-    newTag: v1.0.0
-  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/visits-service
-    newTag: v1.0.0
-  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/vets-service
-    newTag: v1.0.0
-  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/genai-service
-    newTag: v1.0.0
-  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/api-gateway
-    newTag: v1.0.0
-  - name: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/admin-server
-    newTag: v1.0.0
-
-# The RDS endpoint is AWS-generated and changes on every terraform
-# destroy/apply cycle (this project tears its environment down daily to
-# control cost — see docs/jira-backlog.md's Current Status notes), so it
-# can't live in k8s/base/*/configmap.yaml without going stale immediately.
-# Patched here instead, at the overlay that actually represents "today's
-# real dev deployment." Current value as of this writing (re-fetch with
-# `terraform output -raw rds_endpoint` in terraform/environments/dev after
-# every re-apply):
-#   petclinic-dev-mysql.cp8ue2qe0x9i.eu-central-1.rds.amazonaws.com
+# certificate-arn and security-groups are Terraform-generated and change on
+# every destroy/apply cycle (this project tears its environment down daily
+# to control cost) — re-fetch with `terraform output -raw dns_certificate_arn`
+# and `terraform output -raw alb_sg_id` in terraform/environments/dev after
+# every re-apply. See k8s/base/ingress/ingress.yaml's comment for why the
+# security-groups annotation matters (without it, the AWS Load Balancer
+# Controller auto-creates its own SGs, which then can't pass health checks
+# through the node SG, and orphan on manual ALB deletion).
 patches:
-  - target:
-      kind: ConfigMap
-      name: customers-service-config
-    patch: |-
-      - op: replace
-        path: /data/SPRING_DATASOURCE_URL
-        value: jdbc:mysql://petclinic-dev-mysql.cp8ue2qe0x9i.eu-central-1.rds.amazonaws.com:3306/petclinic
-  - target:
-      kind: ConfigMap
-      name: visits-service-config
-    patch: |-
-      - op: replace
-        path: /data/SPRING_DATASOURCE_URL
-        value: jdbc:mysql://petclinic-dev-mysql.cp8ue2qe0x9i.eu-central-1.rds.amazonaws.com:3306/petclinic
-  - target:
-      kind: ConfigMap
-      name: vets-service-config
-    patch: |-
-      - op: replace
-        path: /data/SPRING_DATASOURCE_URL
-        value: jdbc:mysql://petclinic-dev-mysql.cp8ue2qe0x9i.eu-central-1.rds.amazonaws.com:3306/petclinic
-
-  # Same story as the RDS endpoint above: both values are Terraform-generated
-  # and change on every destroy/apply cycle. certificate-arn: re-fetch with
-  # `terraform output -raw dns_certificate_arn`. security-groups: re-fetch
-  # with `terraform output -raw alb_sg_id` — see
-  # k8s/base/ingress/ingress.yaml's comment for why this annotation matters
-  # (without it, the AWS Load Balancer Controller auto-creates its own SGs,
-  # which then can't pass health checks through the node SG, and orphan on
-  # manual ALB deletion).
   - target:
       kind: Ingress
       name: petclinic-ingress

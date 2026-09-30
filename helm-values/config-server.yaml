@@ -1,0 +1,44 @@
+# Config Server (PETPLAT-108) — must be healthy before anything else starts.
+# No init containers: it's the thing every other service's init container
+# waits on. Unlike every other service, all three probes use /actuator/health
+# (technical-spec.md#health-probes-all-services).
+#
+# replicaCount/autoscaling/podDisruptionBudget below are prod-shaped
+# (matching k8s/overlays/prod exactly) — helm-values/dev.yaml forces them
+# back down uniformly for dev regardless of what's set here. See
+# helm-values/dev.yaml and helm-values/prod.yaml for why.
+
+image:
+  repositorySuffix: config-server
+
+component: server
+
+service:
+  port: 8888
+
+probes:
+  startup:
+    path: /actuator/health
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30
+  readiness:
+    path: /actuator/health
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  liveness:
+    path: /actuator/health
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+configMap:
+  GIT_REPO: "https://github.com/spring-petclinic/spring-petclinic-microservices-config"
+  GIT_LABEL: "main"
+
+replicaCount: 2 # prod value (technical-spec.md#kubernetes-overlays, Prod Overlay table)
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

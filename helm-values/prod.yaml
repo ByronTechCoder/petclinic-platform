@@ -1,0 +1,31 @@
+# Prod environment overrides (PETPLAT-109). Per technical-spec.md#kubernetes-overlays
+# and k8s/overlays/prod/kustomization.yaml + hpa.yaml: namespace petclinic-prod,
+# images from the petclinic-prod ECR repos.
+#
+# Deploy: helm upgrade --install {service} helm/petclinic-service/ \
+#   -n petclinic-prod -f helm-values/{service}.yaml -f helm-values/prod.yaml
+#
+# Deliberately does NOT set replicaCount, autoscaling, or podDisruptionBudget
+# here, even though technical-spec.md's illustrative comment for this file
+# says "replicas=2, HPA enabled, PDB enabled" as if those were uniform. They
+# are not: per the actual per-service tables (Prod Overlay, Horizontal Pod
+# Autoscaler, Pod Disruption Budgets), genai-service and admin-server get 1
+# replica (not 2), only 5 of the 8 services get an HPA at all, and only 6 of
+# the 8 get a PDB. The per-service values files already carry the correct,
+# service-specific numbers for all three -- this file setting a blanket
+# value would override every one of those with the wrong number for the
+# services that differ. See the explicit instruction this chart was built
+# under: "Prod replica counts, HPA targets, and PDB settings are per-service
+# — match the existing overlays exactly, do not use blanket defaults."
+#
+# Resource requests/limits also aren't bumped here, for the same reason
+# k8s/overlays/prod/kustomization.yaml doesn't: no specific prod numbers are
+# documented anywhere in technical-spec.md's resource table (which is
+# environment-agnostic) — left as an open decision for real ops tuning
+# rather than inventing figures.
+
+namespace: petclinic-prod
+
+image:
+  registry: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-prod
+  tag: v1.0.0 # Matches k8s/overlays/prod's current tag. Moot until prod infra is applied (no cluster to deploy into yet) — kept in sync with dev's version number.

@@ -1,0 +1,45 @@
+# GenAI Service (PETPLAT-108) — includes the `production` profile like
+# vets-service. MySQL is optional for this service and not wired here: it
+# has JPA + MySQL dependencies but ships no schema files, so there's
+# nothing for it to connect to yet (see k8s/base/genai-service/deployment.yaml).
+#
+# Secret reference matches k8s/base/external-secrets/openai-api-key.yaml's
+# target exactly: K8s Secret "openai-api-key", key "OPENAI_API_KEY".
+#
+# replicaCount/autoscaling below are prod-shaped (matching k8s/overlays/prod
+# + hpa.yaml exactly) — helm-values/dev.yaml forces them back down
+# uniformly for dev. No podDisruptionBudget: genai-service isn't in
+# technical-spec.md's PDB table (a minAvailable=1 budget on a 1-replica
+# prod service would block all voluntary disruption, e.g. node drains).
+
+image:
+  repositorySuffix: genai-service
+
+component: service
+
+service:
+  port: 8084
+
+springProfilesActive: docker,production
+
+configMap:
+  CONFIG_SERVER_URL: "http://config-server:8888"
+
+secretEnv:
+  - name: OPENAI_API_KEY
+    secretName: openai-api-key
+    secretKey: OPENAI_API_KEY
+
+initContainers:
+  - name: wait-for-config-server
+    url: http://config-server:8888/actuator/health
+  - name: wait-for-discovery-server
+    url: http://discovery-server:8761/actuator/health
+
+replicaCount: 1 # prod value (technical-spec.md#kubernetes-overlays, Prod Overlay table)
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70

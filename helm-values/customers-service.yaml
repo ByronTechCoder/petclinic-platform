@@ -1,0 +1,59 @@
+# Customers Service (PETPLAT-108) — MySQL-backed, deployed before Visits
+# (FK dependency on this service's schema).
+#
+# SPRING_DATASOURCE_URL's {rds-endpoint} is a literal placeholder — matches
+# k8s/base/customers-service/configmap.yaml exactly. Substitute the real
+# value from `terraform output -raw rds_endpoint` at install time, e.g.:
+#   helm upgrade --install customers-service helm/petclinic-service/ \
+#     -n petclinic-dev -f helm-values/customers-service.yaml -f helm-values/dev.yaml \
+#     --set-string configMap.SPRING_DATASOURCE_URL="jdbc:mysql://<real-endpoint>:3306/petclinic"
+# Left unsubstituted here on purpose: the endpoint changes on every
+# terraform destroy/apply cycle, so baking a real value into this file
+# would go stale immediately.
+#
+# Secret reference matches k8s/base/external-secrets/rds-credentials.yaml's
+# target exactly: K8s Secret "rds-credentials", keys "username"/"password".
+#
+# replicaCount/autoscaling/podDisruptionBudget below are prod-shaped
+# (matching k8s/overlays/prod + hpa.yaml exactly) — helm-values/dev.yaml
+# forces them back down uniformly for dev.
+
+image:
+  repositorySuffix: customers-service
+
+component: service
+
+service:
+  port: 8081
+
+springProfilesActive: docker,mysql
+
+configMap:
+  CONFIG_SERVER_URL: "http://config-server:8888"
+  SPRING_DATASOURCE_URL: "jdbc:mysql://{rds-endpoint}:3306/petclinic"
+
+secretEnv:
+  - name: SPRING_DATASOURCE_USERNAME
+    secretName: rds-credentials
+    secretKey: username
+  - name: SPRING_DATASOURCE_PASSWORD
+    secretName: rds-credentials
+    secretKey: password
+
+initContainers:
+  - name: wait-for-config-server
+    url: http://config-server:8888/actuator/health
+  - name: wait-for-discovery-server
+    url: http://discovery-server:8761/actuator/health
+
+replicaCount: 2 # prod value (technical-spec.md#kubernetes-overlays, Prod Overlay table)
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

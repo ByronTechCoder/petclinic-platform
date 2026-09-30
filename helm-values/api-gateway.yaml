@@ -1,0 +1,47 @@
+# API Gateway (PETPLAT-108) — the only public-facing service (fronted by
+# k8s/base/ingress/ingress.yaml's ALB, unaffected by this Helm migration —
+# Ingress/ExternalSecrets stay Kustomize-managed, only the 8 Deployments+
+# friends move to Helm). Higher CPU request/limit than the other services
+# since it handles all incoming traffic routing.
+#
+# replicaCount/autoscaling/podDisruptionBudget below are prod-shaped
+# (matching k8s/overlays/prod + hpa.yaml exactly) — helm-values/dev.yaml
+# forces them back down uniformly for dev.
+
+image:
+  repositorySuffix: api-gateway
+
+component: gateway
+
+service:
+  port: 8080
+
+configMap:
+  CONFIG_SERVER_URL: "http://config-server:8888"
+  DISCOVERY_SERVER_URL: "http://discovery-server:8761"
+
+initContainers:
+  - name: wait-for-config-server
+    url: http://config-server:8888/actuator/health
+  - name: wait-for-discovery-server
+    url: http://discovery-server:8761/actuator/health
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 128Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+
+replicaCount: 2 # prod value (technical-spec.md#kubernetes-overlays, Prod Overlay table)
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
