@@ -16,17 +16,17 @@
 | E-3 | EKS Cluster | P0 | 7 | ✅ Done |
 | E-4 | Container Registry (ECR) | P0 | 5 | ✅ Done |
 | E-5 | Database (RDS MySQL) | P0 | 6 | 🟡 Blocked (partial) |
-| E-6 | DNS & Ingress | P1 | 5 | 🟡 Done (dev applied; prod code-complete, not yet applied) |
-| E-7 | Secrets Management (Secrets Manager) | P0 | 6 | ⬜ Not started |
-| E-8 | Kubernetes Manifests — Base | P0 | 8 | ⬜ Not started |
-| E-9 | Kubernetes Manifests — Overlays | P1 | 5 | ⬜ Not started |
+| E-6 | DNS & Ingress | P1 | 5 | 🟡 Done for dev, fully verified end-to-end; prod code-complete, not yet applied |
+| E-7 | Secrets Management (Secrets Manager) | P0 | 6 | ✅ Done |
+| E-8 | Kubernetes Manifests — Base | P0 | 8 | ✅ Done |
+| E-9 | Kubernetes Manifests — Overlays | P1 | 5 | 🟡 Done for dev; PETPLAT-48's end-to-end app verification partially open |
 | E-10 | CI Pipeline (CI-only, ArgoCD handles CD) | P0 | 7 | ⬜ Not started |
 | E-11 | Observability | P1 | 8 | ⬜ Not started |
 | ~~E-12~~ | ~~Bastion Host~~ | ~~P2~~ | ~~0 (removed)~~ | — |
 | E-13 | Security & Compliance | P1 | 8 | ⬜ Not started |
 | E-14 | Scaling & Cost Optimization (Karpenter) | P2 | 6 | ⬜ Not started |
-| E-15 | Documentation & Runbooks | P1 | 11 | ⬜ Not started |
-| E-16 | Helm Charts | P0 | 5 | ⬜ Not started |
+| E-15 | Documentation & Runbooks | P1 | 11 | ⬜ Not started (`docs/helm-guide.md` and `docs/database-initialization.md` exist, built as part of E-16/E-5, not this epic) |
+| E-16 | Helm Charts | P0 | 5 | ✅ Done |
 | E-17 | GitOps with ArgoCD | P0 | 5 | ⬜ Not started |
 | | | **Total** | **109** | |
 
@@ -61,7 +61,7 @@ E-1 (Foundation)
 
 ---
 
-## Current Status (as of 2026-09-25)
+## Current Status (as of 2026-09-30)
 
 | Epic | Status | Notes |
 |------|--------|-------|
@@ -70,20 +70,20 @@ E-1 (Foundation)
 | E-2 Networking (VPC) | ✅ Done | `terraform/modules/vpc/` built and wired into both environments. Applied: dev VPC `vpc-022d7d47318cdce37`, prod VPC `vpc-0aea6a1bbcb10eda5` — each with 2 public subnets (EKS-tagged), IGW, `0.0.0.0/0` route, default SG locked down, and the 4 baseline security groups (EKS cluster/node, RDS restricted to node SG on 3306, ALB open on 80/443 only). No NAT Gateway, per ADR-0001. |
 | E-3 EKS Cluster | ✅ Done | `terraform/modules/eks/` built and wired into both environments. Applied: `petclinic-dev` and `petclinic-prod` clusters, 2-node managed node groups (t4g.small/Graviton, min=2/max=4/desired=2), OIDC provider + EBS-CSI IRSA role, vpc-cni/kube-proxy/coredns/aws-ebs-csi-driver add-ons, control-plane logging (api/audit/authenticator) — all `Creation complete` per `terraform apply` output. Root-user EKS access entry granted in both envs; `kubectl get nodes` itself not yet run in a live session (PETPLAT-14/16's kubectl-dependent checks still open). |
 | E-4 Container Registry (ECR) | ✅ Done | `terraform/modules/ecr/` built and wired into **both** dev and prod (PETPLAT-117 — a 5th E-4 ticket was missing from this backlog for the prod side; added and implemented in this pass). Applied: 8 repos each under `petclinic-dev/` (MUTABLE) and `petclinic-prod/` (IMMUTABLE), scan-on-push + AES256 encryption, lifecycle policy (expire untagged >7d, keep last 10 tagged) on every repo. `scripts/ecr-login.sh` also already present and verified against its acceptance criteria. |
-| E-5 Database (RDS MySQL) | 🟡 Blocked (partial) | `terraform/modules/rds/` built and wired into both environments (PETPLAT-22/23/25/27 fully done). Applied to dev this pass: `petclinic-dev-mysql` `available`, master credentials in Secrets Manager (`petclinic/dev/rds-credentials`). **Fixed 2026-09-25:** the secret's `recovery_window_in_days` was `7`, which is incompatible with this project's daily `terraform destroy`/re-`apply` cost-control cycle — each day's destroy left the secret "scheduled for deletion" and blocked that same day's later `terraform apply` with a 400 from Secrets Manager (hit and fixed live during E-6 work; see E-6 note). Changed to `0`. **Still blocked:** PETPLAT-26's pod-based connectivity check (`kubectl run`/`kubectl create secret`) was denied twice by the Claude Code auto-mode permission classifier under "Secret-Store Writes" — including a credential-free plain TCP reachability test, which also got blocked. Needs the user to grant `kubectl run`/`kubectl create secret` permission, or run the debug pod themselves. PETPLAT-24's "tested: services can connect and tables exist" criterion also still open — needs E-8/E-16/E-17 (K8s manifests/Helm/ArgoCD), none of which exist yet. |
-| E-6 DNS & Ingress | 🟡 Done (dev applied; prod code-complete) | `terraform/modules/dns/` built (Route 53 hosted zone via `data` source — not created, since the zone already exists on domain registration — plus a wildcard `*.{domain_name}` ACM cert with DNS validation). `terraform/modules/eks/` extended with an IRSA role + IAM policy for the AWS Load Balancer Controller (`petclinic-{env}-lb-controller-role`, vendored upstream kubernetes-sigs v2.8.1 IAM policy JSON). Both wired into dev and prod, including a Route 53 alias record (`petclinic-dev.{domain}` / `petclinic.{domain}`) gated behind `var.create_alb_alias_record` (default `false`) so `terraform plan` doesn't break before the ALB exists — it's a `data "aws_lb"` lookup keyed on the AWS Load Balancer Controller's own `elbv2.k8s.aws/cluster` + `ingress.k8s.aws/stack` tags. `k8s/base/ingress/ingress.yaml` created for PETPLAT-30 (base manifest, namespace defaults to `petclinic-dev` pending E-9 overlays; the ACM cert ARN is a documented literal placeholder substituted at apply time, never committed, since it changes every destroy/apply cycle). `scripts/install-lb-controller.sh` created and **fixed live**: the chart's default EC2-instance-metadata VPC-ID lookup 401's from inside a pod's network namespace (IMDS hop-limit-1), crash-looping both controller replicas — script now passes `--set vpcId=$(aws eks describe-cluster ...)` explicitly, no IMDS dependency. **Applied and verified end-to-end in dev this session:** full dev environment applied (72 resources — VPC/EKS/ECR/RDS/DNS all at once, since the account had been destroyed the previous day as part of this project's daily cost-control routine); LB controller installed, both pods `1/1 Running`, `alb` IngressClass registered; `create_alb_alias_record` flipped to `true` and the alias record created — `dns_record_fqdn` output confirms `petclinic-dev.viralcoder.net`; a manually-applied test Ingress (`petclinic-dev/petclinic-ingress`) reconciled successfully (`SuccessfullyReconciled`) after patching in the real cert ARN live. **Not yet done:** prod terraform validates but hasn't been `apply`'d; no `api-gateway` Service/`petclinic-dev` namespace exist as real workloads yet (E-8), so the ALB currently has no healthy targets and PETPLAT-31's "app accessible over HTTPS" criterion can't be fully verified until then. `terraform-reviewer` and `k8s-validator` agents both reviewed this epic's Terraform/K8s changes with no findings. |
-| E-7 Secrets Management | ⬜ Not started | |
-| E-8 K8s Manifests — Base | ⬜ Not started | No `k8s/` directory exists yet |
-| E-9 K8s Manifests — Overlays | ⬜ Not started | |
+| E-5 Database (RDS MySQL) | 🟡 Blocked (partial) | `terraform/modules/rds/` built and wired into both environments (PETPLAT-22/23/25/27 fully done). Applied to dev: `petclinic-dev-mysql` `available`, master credentials in Secrets Manager (`petclinic/dev/rds-credentials`). `recovery_window_in_days` fixed to `0` (was `7`, incompatible with the daily destroy/re-apply cost-control cycle — see E-6/E-7 notes for the same fix applied to the OpenAI secret). **PETPLAT-24's "tested: services can connect and tables exist" is now resolved**, once E-8 existed: customers/visits/vets-service all reached `Running`/`Ready` in dev, which requires their `schema.sql` to have executed successfully against this RDS instance (see `docs/database-initialization.md#verification-status`). **Still blocked:** PETPLAT-26's pod-based connectivity check (`kubectl run`/`kubectl create secret`) was denied twice by the Claude Code auto-mode permission classifier under "Secret-Store Writes" — including a credential-free plain TCP reachability test, which also got blocked. Needs the user to grant that permission, or run the debug pod themselves; the schema-init evidence above is a reasonable substitute but isn't literally this ticket's specified check. |
+| E-6 DNS & Ingress | 🟡 Done for dev, fully verified; prod code-complete | `terraform/modules/dns/` (Route 53 zone via `data` source, wildcard ACM cert) and an AWS Load Balancer Controller IRSA role in `terraform/modules/eks/`, both wired into dev and prod. `k8s/base/ingress/ingress.yaml` and `scripts/install-lb-controller.sh` built — the latter needed a live fix (EC2-metadata VPC-ID lookup 401's from inside a pod's network namespace; script now passes `--set vpcId` explicitly). **Fully verified end-to-end in dev**, including a bug found and fixed after E-8 supplied a real `api-gateway` backend: the Ingress had no `security-groups` annotation, so the controller auto-created its own SGs instead of the Terraform-managed one the node SG trusts, and every target failed health checks with `Target.Timeout` — fixed by pinning `alb.ingress.kubernetes.io/security-groups` to `alb_sg_id` (live and in the committed manifest + dev overlay patch). Confirmed: `curl https://petclinic-dev.viralcoder.net/actuator/health` → `200`, HTTP→HTTPS redirect confirmed. That same bug is also what orphans the controller's security groups if an ALB is ever deleted directly instead of via `kubectl delete ingress` — see `scripts/pre-destroy-cleanup.sh` (E-15-adjacent tooling, no ticket) for the cleanup this created a need for. **Not yet done:** prod terraform validates but hasn't been `apply`'d (no prod cluster exists to test against). |
+| E-7 Secrets Management | ✅ Done | `terraform/modules/secrets/` (OpenAI key via a `sensitive` variable, never hardcoded) and an ESO IRSA role in `terraform/modules/eks/`. `scripts/install-eso.sh` installs the operator via Helm (CRDs via `kubectl apply`, matching the same pattern as the LB controller). **Verified live end-to-end**, twice (once per cluster rebuild): ESO pods `1/1 Running`, `ClusterSecretStore` reports `Ready`/"store validated" (proves the IRSA role actually authenticates, not just that the manifest was accepted), and a real `ExternalSecret` sync was tested in a throwaway namespace — `SecretSynced`, correct `username`/`password` keys pulled from the RDS JSON secret, namespace cleaned up afterward. `k8s/base/external-secrets/{cluster-secret-store,rds-credentials,openai-api-key}.yaml` needed an apiVersion bump partway through this project (`external-secrets.io/v1beta1` → `v1` — chart 2.11.0's CRDs mark `v1beta1` as `served: false`), caught live and fixed, including the stale example in `technical-spec.md`. |
+| E-8 K8s Manifests — Base | ✅ Done | All 8 services' `deployment.yaml`/`service.yaml`/`configmap.yaml`/`serviceaccount.yaml` built in `k8s/base/`, reviewed clean by the `k8s-validator` agent, then applied live to dev — all 8 reached `Running`/`Ready`. **Found and fixed a real bug live:** visits-service's `schema.sql` has an FK to `pets` (created by customers-service's schema), and both were only gated on config-server/discovery-server health, so their schema-init could race — visits-service crashed once with "Failed to open the referenced table 'pets'" before a third `wait-for-customers-service` init container was added to close it properly (this was already the documented intent in `docs/database-initialization.md` from the E-5 pass, just never actually built until now). |
+| E-9 K8s Manifests — Overlays | 🟡 Done for dev; PETPLAT-48 partially open | `k8s/overlays/{dev,prod}/kustomization.yaml` + `hpa.yaml` built first as Kustomize overlays (replicas, image tags, the 5-service prod HPA set), then their replica/image/HPA responsibilities moved into `helm-values/` once E-16 existed to replace them — the overlays are now trimmed to just the Ingress + External Secrets patches they still own (no more double-management between Kustomize and Helm for the same Deployments). PETPLAT-48 (deploy + verify): the "is it up" half is solid (all 8 pods `Ready`, schema-init succeeded, ALB reachable end-to-end) but the "does it actually work" half is only partially checked — Eureka registration, API Gateway proxying to a domain route, an explicit RDS read via a service's own API, a real GenAI completion, and the Admin Server UI were none of them directly exercised. See PETPLAT-48's own acceptance criteria below for the precise breakdown. |
 | E-10 CI Pipeline | ⬜ Not started | No `.github/workflows/` exists yet |
 | E-11 Observability | ⬜ Not started | |
 | E-13 Security & Compliance | ⬜ Not started | |
 | E-14 Scaling & Cost Optimization (Karpenter) | ⬜ Not started | |
-| E-15 Documentation & Runbooks | ⬜ Not started | Only `technical-spec.md` and this backlog exist so far |
-| E-16 Helm Charts | ⬜ Not started | No `helm/` directory exists yet |
+| E-15 Documentation & Runbooks | ⬜ Not started | `docs/helm-guide.md` (E-16) and `docs/database-initialization.md` (E-5) exist, built as part of those epics rather than this one — this epic's own runbook/architecture/onboarding/monitoring/DR/compliance docs are still unwritten |
+| E-16 Helm Charts | ✅ Done | `helm/petclinic-service/` (generic chart: Deployment/Service/ConfigMap/ServiceAccount + conditional HPA/PDB) and `helm-values/` (8 per-service files + `dev.yaml`/`prod.yaml`), built directly from `k8s/base`/`k8s/overlays` as the source of truth. Per-service files carry each service's *production*-shaped replica/HPA/PDB numbers (matching `k8s/overlays/prod` exactly, not a blanket default — e.g. `genai-service`/`admin-server` get 1 replica, only 5 of 8 get an HPA, only 6 of 8 get a PDB); `dev.yaml` forces them down uniformly, `prod.yaml` deliberately doesn't touch those three keys. `scripts/validate-helm.sh` runs `helm lint` + `helm template` + `kubectl apply --dry-run=client` across all 16 combinations (8 services × 2 envs) — all pass, and the `k8s-validator` agent independently reviewed all 16 rendered manifests against `k8s/base`/`k8s/overlays` with zero findings. `docs/helm-guide.md` covers structure, values merge order, deploy/add-service/modify instructions, and the (not-yet-built) ArgoCD integration. Not yet actually `helm install`'d against a live cluster — validated via rendering + dry-run only. |
 | E-17 GitOps with ArgoCD | ⬜ Not started | |
 
-**Next up:** E-2 (VPC), E-3 (EKS), and E-4 (ECR) are all done for both dev and prod. E-5 (RDS) is built, wired, and applied for both envs, but blocked on PETPLAT-26's pod-based connectivity check pending a permission grant (see E-5's Current Status note above) — resolve that before treating E-5 as fully done. E-6 (DNS & Ingress) is built, wired, and applied+verified end-to-end for dev; apply to prod when prod's other infra is applied. E-7 (Secrets Manager, non-RDS secrets) is unblocked (depends only on E-2) and can proceed in parallel. Once E-5 is unblocked, next is E-8 (K8s Base manifests), which E-5, E-6, and E-7 all feed into.
+**Next up:** E-2 through E-4, E-7, E-8, and E-16 are all done. E-5 (RDS) is functionally complete but formally blocked on PETPLAT-26's permission grant. E-6 (DNS & Ingress) is fully verified for dev; apply to prod once prod's other infra is applied. E-9 (K8s Overlays) is done as far as the overlay/Helm-values split goes, but PETPLAT-48's deeper application-level verification (Eureka, gateway routing, RDS reads, GenAI, Admin UI) is still open. With E-16 (Helm) done, E-17 (ArgoCD) is now unblocked and is the natural next epic — it deploys via this same chart/values structure. E-10 (CI) can also proceed in parallel; it feeds image tags into `helm-values/{service}.yaml` for ArgoCD to pick up.
 
 **Known deviation to be aware of:** `terraform init` emits a deprecation warning — Terraform 1.15's S3 backend prefers `use_lockfile` (native S3 locking) over `dynamodb_table`. The backend configs here intentionally keep `dynamodb_table`, matching PETPLAT-2/3/4's explicit DynamoDB-locking acceptance criteria and the technical spec. Non-blocking; worth revisiting if the spec is ever updated to drop the DynamoDB table.
 
@@ -1032,7 +1032,7 @@ Create the K8s Ingress resource that routes external HTTPS traffic to the API Ga
 - [x] Annotations for internet-facing ALB, HTTPS redirect, ACM certificate ARN — cert ARN is a documented literal placeholder in the committed file, substituted at apply time (never hardcoded — it changes every destroy/apply cycle)
 - [x] Routes: `/` → api-gateway service on port 8080
 - [x] Health check path: `/actuator/health`
-- [ ] ALB created and accessible after applying — ALB created and reconciled successfully in dev (verified with the real cert ARN patched in live), but "accessible" isn't fully verified: no `api-gateway` Service/namespace exist yet as real workloads (E-8), so the target group has no healthy targets
+- [x] ALB created and accessible after applying — fully verified once E-8's `api-gateway` existed: found and fixed a real bug along the way (no `security-groups` annotation meant the controller auto-created its own SGs instead of the Terraform-managed one the node SG trusts, so every target failed health checks with `Target.Timeout` — fixed by pinning `alb.ingress.kubernetes.io/security-groups` to `alb_sg_id`, both live and in the committed manifest). Confirmed: `curl https://petclinic-dev.viralcoder.net/actuator/health` → `200`
 
 ---
 
@@ -1053,8 +1053,8 @@ Create a Route 53 A record (alias) pointing the domain to the ALB created by the
 **Acceptance Criteria:**
 - [x] Route 53 alias record created (`petclinic-dev.viralcoder.net` → ALB) — via a `data "aws_lb"` lookup keyed on the AWS Load Balancer Controller's own tags, gated behind `var.create_alb_alias_record` (default `false`, so `terraform plan` doesn't break before the ALB exists); flipped to `true` and applied in dev, confirmed via the `dns_record_fqdn` output
 - [x] Record type: A with alias to ALB
-- [ ] App accessible via domain name over HTTPS — not yet verifiable: no `api-gateway` Service exists (E-8), so the target group has no healthy targets
-- [ ] HTTP redirects to HTTPS — `ssl-redirect` annotation is in place but not yet traffic-tested end-to-end for the same reason
+- [x] App accessible via domain name over HTTPS — `curl https://petclinic-dev.viralcoder.net/actuator/health` → `200`
+- [x] HTTP redirects to HTTPS — confirmed `301` on port 80 (via the ALB's own hostname; same listener config applies regardless of which DNS name points at it)
 
 ---
 
@@ -1104,14 +1104,14 @@ Create the secrets module in `terraform/modules/secrets/` to manage **non-RDS** 
 **Technical Spec:** [Secrets Management](./technical-spec.md#secrets-management), [Terraform Modules](./technical-spec.md#terraform-modules)
 
 **Acceptance Criteria:**
-- [ ] Module in `terraform/modules/secrets/`
-- [ ] Secrets created using `aws_secretsmanager_secret` and `aws_secretsmanager_secret_version` resources
-- [ ] Secrets created: `petclinic/{env}/openai-api-key`
-- [ ] Optional: `petclinic/{env}/config-server/git-username`, `petclinic/{env}/config-server/git-password`
-- [ ] RDS credentials NOT created here (owned by RDS module — PETPLAT-23)
-- [ ] Secret values NOT hardcoded — accept as variables
-- [ ] Outputs: secret ARNs for each
-- [ ] `terraform validate` passes
+- [x] Module in `terraform/modules/secrets/`
+- [x] Secrets created using `aws_secretsmanager_secret` and `aws_secretsmanager_secret_version` resources
+- [x] Secrets created: `petclinic/{env}/openai-api-key`
+- [ ] Optional: `petclinic/{env}/config-server/git-username`, `petclinic/{env}/config-server/git-password` — deliberately skipped: the config server points at a public GitHub repo (technical-spec.md#config-server-details), so no git credentials are needed
+- [x] RDS credentials NOT created here (owned by RDS module — PETPLAT-23)
+- [x] Secret values NOT hardcoded — `openai_api_key` is a `sensitive = true` variable, defaults to `""` at the environment level, real value passed via `TF_VAR_openai_api_key`/`terraform.tfvars` (gitignored)
+- [x] Outputs: secret ARNs for each — `openai_secret_arn`
+- [x] `terraform validate` passes — dev and prod
 
 ---
 
@@ -1130,12 +1130,12 @@ Install External Secrets Operator (ESO) on the EKS cluster. ESO will sync secret
 **Technical Spec:** [Secrets Management](./technical-spec.md#secrets-management), [IRSA Roles](./technical-spec.md#irsa-roles)
 
 **Acceptance Criteria:**
-- [ ] ESO installed via kubectl apply (CRDs + controller)
-- [ ] ESO pods running in `external-secrets` namespace
-- [ ] IAM role for service account (IRSA) created with Secrets Manager read permissions (`secretsmanager:GetSecretValue`, `secretsmanager:DescribeSecret`)
-- [ ] SecretStore or ClusterSecretStore resource created with `provider: aws` and `service: SecretsManager`
-- [ ] Test: create a sample ExternalSecret referencing a Secrets Manager secret and verify K8s Secret is created
-- [ ] Documented: how to add new secrets
+- [x] ESO installed via kubectl apply (CRDs) — controller itself via Helm (`scripts/install-eso.sh`): ESO has no plain-manifest install path for the controller, only for CRDs; same pattern already used for the AWS Load Balancer Controller in E-6
+- [x] ESO pods running in `external-secrets` namespace — verified live: `external-secrets`, `external-secrets-cert-controller`, `external-secrets-webhook` all `1/1 Running`
+- [x] IAM role for service account (IRSA) created with Secrets Manager read permissions (`secretsmanager:GetSecretValue`, `secretsmanager:DescribeSecret`) — `petclinic-{env}-eso-role`
+- [x] ClusterSecretStore resource created with `provider: aws` and `service: SecretsManager` — verified `Ready: True`, "store validated" (confirms the IRSA role actually authenticates, not just that the manifest was accepted)
+- [x] Test: sample ExternalSecret verified end-to-end — applied the RDS credentials ExternalSecret into a throwaway namespace, confirmed `STATUS: SecretSynced`/`READY: True` and correct `username`/`password` keys, then deleted the namespace
+- [x] Documented: how to add new secrets — printed by `scripts/install-eso.sh` on every run, and in `docs/helm-guide.md`
 
 ---
 
@@ -1154,13 +1154,13 @@ Create ExternalSecret resource that syncs RDS credentials from Secrets Manager i
 **Technical Spec:** [Secrets Management](./technical-spec.md#secrets-management)
 
 **Acceptance Criteria:**
-- [ ] ExternalSecret manifest at `k8s/base/external-secrets/rds-credentials.yaml`
-- [ ] References Secrets Manager secret: `petclinic/{env}/rds-credentials` (single JSON secret)
-- [ ] Uses `remoteRef.key` with `remoteRef.property` to extract `username` and `password` from JSON
-- [ ] Creates K8s Secret with keys: `username`, `password`
-- [ ] Refresh interval: 1h
-- [ ] Secret created in the correct namespace
-- [ ] Verified: `kubectl get secret` shows the created secret
+- [x] ExternalSecret manifest at `k8s/base/external-secrets/rds-credentials.yaml`
+- [x] References Secrets Manager secret: `petclinic/{env}/rds-credentials` (single JSON secret)
+- [x] Uses `remoteRef.key` with `remoteRef.property` to extract `username` and `password` from JSON
+- [x] Creates K8s Secret with keys: `username`, `password`
+- [x] Refresh interval: 1h
+- [x] Secret created in the correct namespace
+- [x] Verified: synced live in a throwaway namespace — `kubectl get secret rds-credentials` showed both keys, `username` decoded to `petclinic`, `password` was the expected 20 bytes
 
 ---
 
@@ -1179,10 +1179,10 @@ Create ExternalSecret for the GenAI service's OpenAI API key from Secrets Manage
 **Technical Spec:** [Secrets Management](./technical-spec.md#secrets-management)
 
 **Acceptance Criteria:**
-- [ ] ExternalSecret manifest at `k8s/base/external-secrets/openai-api-key.yaml`
-- [ ] References Secrets Manager secret: `petclinic/{env}/openai-api-key`
-- [ ] Creates K8s Secret with key: `OPENAI_API_KEY`
-- [ ] Verified: secret created in K8s
+- [x] ExternalSecret manifest at `k8s/base/external-secrets/openai-api-key.yaml`
+- [x] References Secrets Manager secret: `petclinic/{env}/openai-api-key`
+- [x] Creates K8s Secret with key: `OPENAI_API_KEY`
+- [x] Verified: secret created in K8s — applied live during the full dev rollout (PETPLAT-48); `genai-service`'s pod (which mounts this secret via `secretKeyRef`) reached `Running`/`Ready`, which it could not have done had the secret not synced
 
 ---
 
@@ -1201,11 +1201,11 @@ Create an IAM role with a trust policy for the ESO service account (IRSA) with p
 **Technical Spec:** [IRSA Roles](./technical-spec.md#irsa-roles)
 
 **Acceptance Criteria:**
-- [ ] IAM role created with OIDC trust policy for the ESO service account
-- [ ] Policy: `secretsmanager:GetSecretValue`, `secretsmanager:DescribeSecret` on `arn:aws:secretsmanager:*:*:secret:petclinic/*`
-- [ ] Policy: `kms:Decrypt` for encrypted secrets (if using custom KMS key)
-- [ ] Role ARN output for use in ESO ServiceAccount annotation
-- [ ] `terraform validate` passes
+- [x] IAM role created with OIDC trust policy for the ESO service account — `petclinic-{env}-eso-role`, trust-scoped to `system:serviceaccount:external-secrets:external-secrets-sa`
+- [x] Policy: `secretsmanager:GetSecretValue`, `secretsmanager:DescribeSecret` — scoped to `arn:aws:secretsmanager:{region}:{account_id}:secret:petclinic/*` (tighter than the ticket's literal `*:*` wildcard, since the account/region are already known in this module)
+- [ ] Policy: `kms:Decrypt` — deliberately omitted: all secrets here use the default AWS-managed `aws/secretsmanager` key, whose resource policy already permits decryption for principals holding `secretsmanager:GetSecretValue`; a custom KMS key would need this grant, but nothing in this project uses one
+- [x] Role ARN output for use in ESO ServiceAccount annotation — `eso_role_arn`
+- [x] `terraform validate` passes — dev and prod
 
 ---
 
@@ -1233,9 +1233,9 @@ Create namespace definitions for dev and prod.
 **Technical Spec:** [Kubernetes Manifests](./technical-spec.md#kubernetes-manifests)
 
 **Acceptance Criteria:**
-- [ ] `k8s/base/namespaces.yaml` with petclinic-dev and petclinic-prod namespaces
-- [ ] Namespaces labeled: app.kubernetes.io/part-of=petclinic, environment={dev,prod}
-- [ ] `kubectl apply --dry-run=client` passes
+- [x] `k8s/base/namespaces.yaml` with petclinic-dev and petclinic-prod namespaces
+- [x] Namespaces labeled: app.kubernetes.io/part-of=petclinic, environment={dev,prod} — plus Pod Security Admission labels (`baseline`/`restricted`) per technical-spec.md#namespaces
+- [x] `kubectl apply --dry-run=client` passes — and applied live to dev
 
 ---
 
@@ -1254,16 +1254,16 @@ Config Server must deploy first. All other services depend on it.
 **Technical Spec:** [Application Services](./technical-spec.md#application-services), [Kubernetes Manifests](./technical-spec.md#kubernetes-manifests)
 
 **Acceptance Criteria:**
-- [ ] `k8s/base/config-server/deployment.yaml` — 1 replica, port 8888, SPRING_PROFILES_ACTIVE=docker
-- [ ] `k8s/base/config-server/service.yaml` — ClusterIP, port 8888
-- [ ] `k8s/base/config-server/configmap.yaml` — GIT_REPO URL for config
-- [ ] Startup probe: /actuator/health, port 8888
-- [ ] Readiness probe: /actuator/health, port 8888
-- [ ] Liveness probe: /actuator/health, port 8888
-- [ ] Resource requests: cpu=100m, memory=128Mi; limits: cpu=500m, memory=512Mi
-- [ ] Image: `{account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic-{env}/config-server:<TAG>` (placeholder)
-- [ ] ServiceAccount created
-- [ ] `kubectl apply --dry-run=client` passes
+- [x] `k8s/base/config-server/deployment.yaml` — 1 replica, port 8888, SPRING_PROFILES_ACTIVE=docker
+- [x] `k8s/base/config-server/service.yaml` — ClusterIP, port 8888
+- [x] `k8s/base/config-server/configmap.yaml` — GIT_REPO URL for config (plus GIT_LABEL=main)
+- [x] Startup probe: /actuator/health, port 8888
+- [x] Readiness probe: /actuator/health, port 8888 (config-server uniquely uses the same path for all three probes, per technical-spec.md#health-probes-all-services)
+- [x] Liveness probe: /actuator/health, port 8888
+- [x] Resource requests: cpu=100m, memory=128Mi; limits: cpu=500m, memory=512Mi
+- [x] Image: `771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/config-server:placeholder` in base — real ECR path/tag substituted by the Kustomize overlay's `images:` transformer (later, by the Helm chart's `image.registry`+`image.repositorySuffix`+`image.tag` once E-16 superseded the overlay for this)
+- [x] ServiceAccount created
+- [x] `kubectl apply --dry-run=client` passes — and applied live to dev, `Running`/`Ready`
 
 ---
 
@@ -1282,12 +1282,12 @@ Discovery Server (Eureka) depends on Config Server. Must be running before domai
 **Technical Spec:** [Application Services](./technical-spec.md#application-services), [Kubernetes Manifests](./technical-spec.md#kubernetes-manifests)
 
 **Acceptance Criteria:**
-- [ ] `k8s/base/discovery-server/deployment.yaml` — port 8761, env: CONFIG_SERVER_URL=http://config-server:8888
-- [ ] `k8s/base/discovery-server/service.yaml` — ClusterIP, port 8761
-- [ ] Init container or readiness dependency on Config Server
-- [ ] Probes: readiness and liveness on /actuator/health endpoints
-- [ ] Resources: requests cpu=100m, memory=128Mi; limits cpu=500m, memory=512Mi
-- [ ] `kubectl apply --dry-run=client` passes
+- [x] `k8s/base/discovery-server/deployment.yaml` — port 8761, env: CONFIG_SERVER_URL=http://config-server:8888 (via ConfigMap)
+- [x] `k8s/base/discovery-server/service.yaml` — ClusterIP, port 8761
+- [x] Init container on Config Server — `wait-for-config-server` (busybox:1.36 wget loop against `/actuator/health`)
+- [x] Probes: startup + readiness + liveness on /actuator/health(/readiness|/liveness) endpoints
+- [x] Resources: requests cpu=100m, memory=128Mi; limits cpu=500m, memory=512Mi
+- [x] `kubectl apply --dry-run=client` passes — and applied live to dev, `Running`/`Ready`
 
 ---
 
@@ -1306,15 +1306,15 @@ Create manifests for the three database-backed services. They need MySQL connect
 **Technical Spec:** [Application Services](./technical-spec.md#application-services), [Kubernetes Manifests](./technical-spec.md#kubernetes-manifests), [RDS Database](./technical-spec.md#rds-database)
 
 **Acceptance Criteria:**
-- [ ] Manifests for customers-service (port 8081), visits-service (port 8082), vets-service (port 8083)
-- [ ] Each: Deployment, Service (ClusterIP), ConfigMap, ServiceAccount
-- [ ] Spring profile: `docker,mysql` (activates MySQL instead of HSQLDB)
-- [ ] ConfigMap: SPRING_DATASOURCE_URL pointing to RDS endpoint
-- [ ] Secret reference: SPRING_DATASOURCE_USERNAME and SPRING_DATASOURCE_PASSWORD from K8s secret (synced by ESO)
-- [ ] CONFIG_SERVER_URL env var pointing to config-server service
-- [ ] Readiness/liveness probes on /actuator/health endpoints
-- [ ] Resources: cpu=100m/500m, memory=128Mi/512Mi
-- [ ] `kubectl apply --dry-run=client` passes for all three
+- [x] Manifests for customers-service (port 8081), visits-service (port 8082), vets-service (port 8083) — vets-service also gets the `production` Spring profile (required for its `@Profile("production")`-gated Caffeine cache — technical-spec.md#spring-profiles)
+- [x] Each: Deployment, Service (ClusterIP), ConfigMap, ServiceAccount
+- [x] Spring profile: `docker,mysql` (activates MySQL instead of HSQLDB)
+- [x] ConfigMap: SPRING_DATASOURCE_URL pointing to RDS endpoint — literal `{rds-endpoint}` placeholder in the committed file (the real endpoint changes on every `terraform destroy`/`apply` cycle), substituted at apply time; see `docs/database-initialization.md`
+- [x] Secret reference: SPRING_DATASOURCE_USERNAME and SPRING_DATASOURCE_PASSWORD from K8s secret `rds-credentials` (synced by ESO)
+- [x] CONFIG_SERVER_URL env var pointing to config-server service
+- [x] Readiness/liveness probes on /actuator/health endpoints (plus startupProbe)
+- [x] Resources: cpu=100m/500m, memory=128Mi/512Mi
+- [x] `kubectl apply --dry-run=client` passes for all three — and applied live to dev, all three `Running`/`Ready`, successfully connected to and initialized schema on RDS (`docs/database-initialization.md#verification-status`). **Also fixed a real bug found live:** visits-service's `schema.sql` has a FK to `pets` (created by customers-service's schema), and both were only gated on config-server/discovery-server — a race let visits-service crash once with "Failed to open the referenced table 'pets'" before a third `wait-for-customers-service` init container was added to close it (not in this ticket's original AC, but required for the "all three deployed successfully" outcome it asks for)
 
 ---
 
@@ -1333,12 +1333,12 @@ GenAI service needs the OpenAI API key from Secrets Manager (synced to K8s Secre
 **Technical Spec:** [Application Services](./technical-spec.md#application-services), [Kubernetes Manifests](./technical-spec.md#kubernetes-manifests)
 
 **Acceptance Criteria:**
-- [ ] `k8s/base/genai-service/` — Deployment (port 8084), Service, ServiceAccount
-- [ ] OPENAI_API_KEY from K8s secret (synced by ESO)
-- [ ] CONFIG_SERVER_URL env var
-- [ ] Probes on /actuator/health endpoints
-- [ ] Resources: cpu=100m/500m, memory=128Mi/512Mi
-- [ ] `kubectl apply --dry-run=client` passes
+- [x] `k8s/base/genai-service/` — Deployment (port 8084), Service, ServiceAccount (plus ConfigMap, per the shared manifest-file-structure convention)
+- [x] OPENAI_API_KEY from K8s secret `openai-api-key` (synced by ESO)
+- [x] CONFIG_SERVER_URL env var
+- [x] Probes on /actuator/health(/readiness|/liveness) endpoints (plus startupProbe); also gets the `production` Spring profile alongside vets-service
+- [x] Resources: cpu=100m/500m, memory=128Mi/512Mi
+- [x] `kubectl apply --dry-run=client` passes — and applied live to dev, `Running`/`Ready`
 
 ---
 
@@ -1357,12 +1357,12 @@ API Gateway routes traffic to all domain services and serves the frontend. This 
 **Technical Spec:** [Application Services](./technical-spec.md#application-services), [Kubernetes Manifests](./technical-spec.md#kubernetes-manifests)
 
 **Acceptance Criteria:**
-- [ ] `k8s/base/api-gateway/` — Deployment (port 8080), Service (ClusterIP), ServiceAccount
-- [ ] CONFIG_SERVER_URL and DISCOVERY_SERVER_URL env vars
-- [ ] Probes: readiness and liveness
-- [ ] Resources: cpu=200m/1000m, memory=128Mi/512Mi (gateway handles more traffic)
-- [ ] Service is the target for the Ingress resource
-- [ ] `kubectl apply --dry-run=client` passes
+- [x] `k8s/base/api-gateway/` — Deployment (port 8080), Service (ClusterIP), ServiceAccount
+- [x] CONFIG_SERVER_URL and DISCOVERY_SERVER_URL env vars
+- [x] Probes: startup, readiness, and liveness
+- [x] Resources: cpu=200m/1000m, memory=128Mi/512Mi (gateway handles more traffic)
+- [x] Service is the target for the Ingress resource — `k8s/base/ingress/ingress.yaml` routes `/` → `api-gateway:8080`
+- [x] `kubectl apply --dry-run=client` passes — and applied live to dev; confirmed end-to-end via `https://petclinic-dev.viralcoder.net/actuator/health` returning `200` through the real ALB (E-6)
 
 ---
 
@@ -1381,11 +1381,11 @@ Spring Boot Admin for monitoring all services.
 **Technical Spec:** [Application Services](./technical-spec.md#application-services), [Kubernetes Manifests](./technical-spec.md#kubernetes-manifests)
 
 **Acceptance Criteria:**
-- [ ] `k8s/base/admin-server/` — Deployment (port 9090), Service, ServiceAccount
-- [ ] CONFIG_SERVER_URL env var
-- [ ] Probes on /actuator/health endpoints
-- [ ] Resources: cpu=100m/500m, memory=128Mi/512Mi
-- [ ] `kubectl apply --dry-run=client` passes
+- [x] `k8s/base/admin-server/` — Deployment (port 9090), Service, ServiceAccount
+- [x] CONFIG_SERVER_URL env var
+- [x] Probes on /actuator/health(/readiness|/liveness) endpoints (plus startupProbe)
+- [x] Resources: cpu=100m/500m, memory=128Mi/512Mi
+- [x] `kubectl apply --dry-run=client` passes — and applied live to dev, `Running`/`Ready`
 
 ---
 
@@ -1413,12 +1413,12 @@ Define dev environment settings that patch base manifests for the dev environmen
 **Technical Spec:** [Kubernetes Overlays](./technical-spec.md#kubernetes-overlays), [Helm Charts](./technical-spec.md#helm-charts)
 
 **Acceptance Criteria:**
-- [ ] Dev environment settings defined (to be expressed as Helm values)
-- [ ] All services: 1 replica
-- [ ] Resource limits appropriate for dev (can be smaller)
-- [ ] Namespace: petclinic-dev
-- [ ] Image tags use SHA-based tags (consistent with CI/CD); initial deploy uses tag from PETPLAT-85
-- [ ] Settings documented for translation into `helm-values/dev.yaml` (E-16)
+- [x] Dev environment settings defined — originally as `k8s/overlays/dev/kustomization.yaml`, now expressed directly as `helm-values/dev.yaml` (E-16 superseded the Kustomize overlay for the 8 services; that overlay is now trimmed to just the Ingress/ExternalSecrets it still owns)
+- [x] All services: 1 replica — `helm-values/dev.yaml`'s blanket `replicaCount: 1` override
+- [x] Resource limits appropriate for dev — unchanged from the chart/per-service defaults (technical-spec.md's sizing table is environment-agnostic; no separate "smaller for dev" numbers are specified anywhere)
+- [x] Namespace: petclinic-dev
+- [x] Image tags — `v1.0.0` (a real pushed release tag, superseding the "SHA-based, from PETPLAT-85" assumption since CI/E-10 doesn't exist yet and images were built+pushed manually instead)
+- [x] Settings documented for translation into `helm-values/dev.yaml` (E-16) — done; see `docs/helm-guide.md`
 
 ---
 
@@ -1437,14 +1437,14 @@ Define prod environment settings with production-appropriate configuration. Thes
 **Technical Spec:** [Kubernetes Overlays](./technical-spec.md#kubernetes-overlays), [Helm Charts](./technical-spec.md#helm-charts)
 
 **Acceptance Criteria:**
-- [ ] Prod environment settings defined (to be expressed as Helm values)
-- [ ] Domain services: 2 replicas minimum
-- [ ] Infrastructure services (config, discovery): 2 replicas for HA
-- [ ] API Gateway: 2-3 replicas
-- [ ] Namespace: petclinic-prod
-- [ ] Image tags use SHA-based or release tags
-- [ ] Resource limits increased where appropriate
-- [ ] Settings documented for translation into `helm-values/prod.yaml` (E-16)
+- [x] Prod environment settings defined — originally as `k8s/overlays/prod/kustomization.yaml` + `hpa.yaml`, now expressed directly as `helm-values/{service}.yaml` (each service's own prod-shaped replica/HPA/PDB numbers) + `helm-values/prod.yaml` (namespace + image registry only — see PETPLAT-109/111 for why replicas/HPA/PDB deliberately aren't blanket-set there)
+- [x] Domain services: 2 replicas minimum — customers/visits/vets all 2
+- [x] Infrastructure services (config, discovery): 2 replicas for HA
+- [x] API Gateway: 2 replicas (base) + HPA up to 6
+- [x] Namespace: petclinic-prod
+- [x] Image tags — `v1.0.0` (real release tag; moot until prod infra itself is `terraform apply`'d — no cluster exists to deploy into yet)
+- [ ] Resource limits increased where appropriate — deliberately NOT done: no specific prod numbers are documented anywhere in technical-spec.md's resource table (environment-agnostic), so none were invented; left as an open decision for real ops tuning
+- [x] Settings documented for translation into `helm-values/prod.yaml` (E-16) — done; see `docs/helm-guide.md`
 
 ---
 
@@ -1463,11 +1463,11 @@ Add HPA resources in prod overlay for stateless services.
 **Technical Spec:** [Kubernetes Overlays](./technical-spec.md#kubernetes-overlays)
 
 **Acceptance Criteria:**
-- [ ] HPA for api-gateway: min=2, max=6, target CPU=70%
-- [ ] HPA for customers, visits, vets: min=2, max=4, target CPU=70%
-- [ ] HPA for genai-service: min=1, max=3, target CPU=70%
-- [ ] Metrics server installed on EKS (required for HPA)
-- [ ] `kubectl apply --dry-run=client` passes
+- [x] HPA for api-gateway: min=2, max=6, target CPU=70% — `helm-values/api-gateway.yaml`'s `autoscaling` block, rendered by `helm/petclinic-service/templates/hpa.yaml`
+- [x] HPA for customers, visits, vets: min=2, max=4, target CPU=70%
+- [x] HPA for genai-service: min=1, max=3, target CPU=70%
+- [ ] Metrics server installed on EKS (required for HPA) — not done (PETPLAT-72, separate epic); HPA objects render and apply correctly regardless, but won't actually scale anything until the Metrics Server exists
+- [x] `kubectl apply --dry-run=client` passes — via `scripts/validate-helm.sh`, all 5 HPA-enabled services × prod
 
 ---
 
@@ -1486,14 +1486,18 @@ Deploy all 8 services to dev namespace and verify the full application is workin
 **Technical Spec:** [Application Services](./technical-spec.md#application-services), [Kubernetes Overlays](./technical-spec.md#kubernetes-overlays), [Helm Charts](./technical-spec.md#helm-charts)
 
 **Acceptance Criteria:**
-- [ ] All 8 deployments running in petclinic-dev namespace
-- [ ] All pods in Ready state
-- [ ] Config Server healthy: `curl config-server:8888/actuator/health`
-- [ ] Discovery Server shows all services registered: `curl discovery-server:8761/eureka/apps`
-- [ ] API Gateway accessible and routing to domain services
-- [ ] Customers, Visits, Vets services can read/write to RDS
-- [ ] GenAI service responds (with valid API key)
-- [ ] Admin Server shows all services
+- [x] All 8 deployments running in petclinic-dev namespace — verified live
+- [x] All pods in Ready state — verified live, `1/1 Running` across the board (visits-service needed the FK-race fix in PETPLAT-41 first)
+- [x] Config Server healthy — not manually curled, but its own `startupProbe`/`readinessProbe`/`livenessProbe` (all hitting `/actuator/health:8888`) passed, which is Kubernetes independently confirming the same endpoint
+- [ ] Discovery Server shows all services registered — not verified: no `curl discovery-server:8761/eureka/apps` was actually run. Port-forward commands for this were given to the user, but the check itself wasn't performed
+- [x] API Gateway accessible — verified end-to-end through the real ALB and domain: `curl https://petclinic-dev.viralcoder.net/actuator/health` → `200`
+- [ ] API Gateway routing to domain services — not verified: only the gateway's own health endpoint was checked, not a proxied route like `/api/customer/**`
+- [x] Customers, Visits, Vets services can write to RDS — each service's own `schema.sql` (a write) runs during Spring context startup and must succeed before the pod can reach `Ready`; all three reached `Ready`, including visits-service's FK-dependent schema after the PETPLAT-41 fix
+- [ ] Customers, Visits, Vets services can read from RDS via their own API — not separately verified (no REST call made against `/owners`, `/visits`, etc.)
+- [ ] GenAI service responds (with valid API key) — pod reached `Ready` with the real OpenAI key synced in (see PETPLAT-36), but no actual chat/completion API call was made to confirm a real OpenAI response
+- [ ] Admin Server shows all services — pod reached `Ready`; the Spring Boot Admin UI itself was not opened/checked
+
+**Overall: substantially complete but not fully closed** — the "is it up" half of this ticket (deployments, pod readiness, schema init, ALB reachability) is solidly verified; the "does it actually do its job end-to-end" half (Eureka registration, gateway proxying, RDS reads via API, a real GenAI response, the Admin UI) still needs a hands-on pass, ideally using the port-forward commands already documented for each service.
 
 ---
 
@@ -2759,15 +2763,15 @@ Create a generic, reusable Helm chart at `helm/petclinic-service/` that can depl
 **Technical Spec:** [Helm Charts](./technical-spec.md#helm-charts)
 
 **Acceptance Criteria:**
-- [ ] Chart at `helm/petclinic-service/` with Chart.yaml, values.yaml, templates/
-- [ ] Templates: deployment.yaml, service.yaml, configmap.yaml, serviceaccount.yaml, hpa.yaml, pdb.yaml
-- [ ] HPA and PDB templates are conditional (only rendered when enabled in values)
-- [ ] Default values.yaml with sensible defaults for all 8 services
-- [ ] Supports: image repository/tag, replicas, resources, ports, env vars, probes, secrets
-- [ ] Supports: initContainers (for service dependency ordering)
-- [ ] Labels follow Kubernetes recommended labels (app.kubernetes.io/*)
-- [ ] `helm lint helm/petclinic-service/` passes
-- [ ] `helm template` renders valid YAML for each service
+- [x] Chart at `helm/petclinic-service/` with Chart.yaml, values.yaml, templates/
+- [x] Templates: deployment.yaml, service.yaml, configmap.yaml, serviceaccount.yaml, hpa.yaml, pdb.yaml (plus `_helpers.tpl` for shared name/label/namespace logic)
+- [x] HPA and PDB templates are conditional (only rendered when enabled in values) — verified live: rendered `api-gateway`+dev has 4 resources despite `api-gateway.yaml` itself enabling both, since `dev.yaml`'s blanket override wins
+- [x] Default values.yaml with sensible defaults for all 8 services
+- [x] Supports: image repository/tag, replicas, resources, ports, env vars, probes, secrets
+- [x] Supports: initContainers (for service dependency ordering) — parameterized as `[{name, url}]`, rendered as the standard busybox:1.36 wget-loop pattern
+- [x] Labels follow Kubernetes recommended labels (app.kubernetes.io/*)
+- [x] `helm lint helm/petclinic-service/` passes
+- [x] `helm template` renders valid YAML for each service — all 16 (8 services × 2 envs) via `scripts/validate-helm.sh`
 
 ---
 
@@ -2786,13 +2790,13 @@ Create per-service values files at `helm-values/{service}.yaml` for all 8 Petcli
 **Technical Spec:** [Helm Charts](./technical-spec.md#helm-charts), [Application Services](./technical-spec.md#application-services)
 
 **Acceptance Criteria:**
-- [ ] Values files created for all 8 services: `helm-values/config-server.yaml`, `helm-values/discovery-server.yaml`, `helm-values/api-gateway.yaml`, `helm-values/customers-service.yaml`, `helm-values/visits-service.yaml`, `helm-values/vets-service.yaml`, `helm-values/genai-service.yaml`, `helm-values/admin-server.yaml`
-- [ ] Each file specifies: image repo (`{account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic-{env}/{service}`), image tag, container port, service port
-- [ ] Database services (customers, visits, vets): Spring profiles `docker,mysql`, datasource URL, secret references for RDS credentials
-- [ ] GenAI service: secret reference for OpenAI API key from Secrets Manager (via ESO)
-- [ ] Config Server: GIT_REPO URL for config
-- [ ] All services: CONFIG_SERVER_URL, readiness/liveness probe paths
-- [ ] `helm template` with each values file renders correct manifests
+- [x] Values files created for all 8 services: `helm-values/config-server.yaml`, `helm-values/discovery-server.yaml`, `helm-values/api-gateway.yaml`, `helm-values/customers-service.yaml`, `helm-values/visits-service.yaml`, `helm-values/vets-service.yaml`, `helm-values/genai-service.yaml`, `helm-values/admin-server.yaml`
+- [x] Each file specifies: image repo, image tag, container port, service port — repo is split into `image.registry` (env-specific, set in `dev.yaml`/`prod.yaml`) + `image.repositorySuffix` (service-specific, set here), since the two merged files each need to own only their half of the ECR path
+- [x] Database services (customers, visits, vets): Spring profiles `docker,mysql` (vets adds `,production` for its Caffeine cache), datasource URL (literal `{rds-endpoint}` placeholder, matching `k8s/base`), secret references for RDS credentials
+- [x] GenAI service: secret reference for OpenAI API key from Secrets Manager (via ESO)
+- [x] Config Server: GIT_REPO URL for config (plus GIT_LABEL)
+- [x] All services: CONFIG_SERVER_URL, readiness/liveness probe paths (plus startupProbe; config-server uniquely uses `/actuator/health` for all three)
+- [x] `helm template` with each values file renders correct manifests — verified via `scripts/validate-helm.sh` and independently reviewed by the k8s-validator agent against `k8s/base`/`k8s/overlays` with zero findings
 
 ---
 
@@ -2811,12 +2815,12 @@ Create environment-specific values files at `helm-values/dev.yaml` and `helm-val
 **Technical Spec:** [Helm Charts](./technical-spec.md#helm-charts), [Kubernetes Overlays](./technical-spec.md#kubernetes-overlays)
 
 **Acceptance Criteria:**
-- [ ] `helm-values/dev.yaml` — 1 replica per service, smaller resource limits, namespace petclinic-dev, HPA disabled
-- [ ] `helm-values/prod.yaml` — 2+ replicas for domain services, larger resources, namespace petclinic-prod, HPA enabled
-- [ ] Prod values include PDB settings (minAvailable=1)
-- [ ] Prod values include HPA settings (min/max replicas, target CPU)
-- [ ] Values are merged with per-service values when deploying: `helm install -f helm-values/{service}.yaml -f helm-values/{env}.yaml`
-- [ ] `helm template` with combined values files renders correct manifests
+- [x] `helm-values/dev.yaml` — 1 replica per service (blanket override), namespace petclinic-dev, HPA and PDB disabled (blanket overrides). Resource limits are NOT shrunk from the chart/per-service defaults: technical-spec.md's sizing table is environment-agnostic, no separate dev numbers are documented anywhere
+- [x] `helm-values/prod.yaml` — namespace petclinic-prod, image registry. Replicas/HPA/PDB are deliberately NOT set here — see below
+- [x] Prod values include PDB settings (minAvailable=1) — per-service, in each service's own `helm-values/{service}.yaml` (6 of 8 services, matching technical-spec.md's PDB table exactly — not the 2 services excluded from it)
+- [x] Prod values include HPA settings (min/max replicas, target CPU) — per-service, same reasoning (5 of 8 services)
+- [x] Values are merged with per-service values when deploying: `helm install -f helm-values/{service}.yaml -f helm-values/{env}.yaml`
+- [x] `helm template` with combined values files renders correct manifests — this is exactly why PDB/HPA/replicas live in the per-service files, not `prod.yaml`: since `prod.yaml` is shared across all 8 `helm install` invocations, a blanket `replicas=2`/`HPA enabled` there would incorrectly override `genai-service`/`admin-server`'s real prod values (1 replica, no PDB) and give `config-server`/`discovery-server`/`admin-server` an HPA they were never supposed to have
 
 ---
 
@@ -2835,12 +2839,12 @@ Validate that Helm template rendering produces correct, deployable Kubernetes ma
 **Technical Spec:** [Helm Charts](./technical-spec.md#helm-charts)
 
 **Acceptance Criteria:**
-- [ ] `helm lint helm/petclinic-service/` passes
-- [ ] `helm template` renders valid YAML for each of the 8 services with dev values
-- [ ] `helm template` renders valid YAML for each of the 8 services with prod values
-- [ ] `kubectl apply --dry-run=client` passes on all rendered templates
-- [ ] Rendered output matches expected: correct ports, env vars, secrets, probes, replicas
-- [ ] Script created at `scripts/validate-helm.sh` to automate this validation for all services and environments
+- [x] `helm lint helm/petclinic-service/` passes
+- [x] `helm template` renders valid YAML for each of the 8 services with dev values
+- [x] `helm template` renders valid YAML for each of the 8 services with prod values
+- [x] `kubectl apply --dry-run=client` passes on all rendered templates — 16/16
+- [x] Rendered output matches expected: correct ports, env vars, secrets, probes, replicas — verified via `scripts/validate-helm.sh` and independently by the k8s-validator agent against `k8s/base`/`k8s/overlays`, zero findings
+- [x] Script created at `scripts/validate-helm.sh` to automate this validation for all services and environments
 
 ---
 
@@ -2859,13 +2863,13 @@ Document the Helm chart structure, values file conventions, and how to add a new
 **Technical Spec:** [Helm Charts](./technical-spec.md#helm-charts)
 
 **Acceptance Criteria:**
-- [ ] Documentation in `docs/helm-guide.md` or as a section in architecture.md
-- [ ] Chart structure explained: templates, values hierarchy
-- [ ] How to: deploy a service manually with Helm
-- [ ] How to: add a new service (create values file, add ArgoCD Application)
-- [ ] How to: change resources, replicas, or environment variables
-- [ ] Values merge order documented: defaults < per-service < per-environment
-- [ ] Integration with ArgoCD documented (E-17)
+- [x] Documentation in `docs/helm-guide.md`
+- [x] Chart structure explained: templates, values hierarchy
+- [x] How to: deploy a service manually with Helm
+- [x] How to: add a new service (create values file, add ArgoCD Application)
+- [x] How to: change resources, replicas, or environment variables
+- [x] Values merge order documented: defaults < per-service < per-environment, including the deliberate exception for replicas/HPA/PDB (per-service overrides dev's blanket-off, not the other way around)
+- [x] Integration with ArgoCD documented (E-17) — documented as not-yet-built, with the exact `Application` CRD shape it'll need per `technical-spec.md`
 
 ---
 
