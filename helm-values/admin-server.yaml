@@ -9,15 +9,12 @@
 
 image:
   repositorySuffix: admin-server
-
+  tag: 789d9ac
 component: admin
-
 service:
   port: 9090
-
 configMap:
   CONFIG_SERVER_URL: "http://config-server:8888"
-
 initContainers:
   - name: wait-for-config-server
     url: http://config-server:8888/actuator/health
