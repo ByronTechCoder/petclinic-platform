@@ -125,6 +125,17 @@ variable "create_alb_alias_record" {
   default     = false
 }
 
+variable "github_actions_org" {
+  description = "GitHub org/username that owns the application repo fork (spring-petclinic-microservices), used in the OIDC trust policy (PETPLAT-52). Must be the real value — derive it with `git -C ../spring-petclinic-microservices remote get-url origin`, never hardcode a placeholder. Set in terraform.tfvars (not committed)."
+  type        = string
+}
+
+variable "github_actions_repo" {
+  description = "Application repo name the OIDC trust policy is scoped to (not this platform repo)."
+  type        = string
+  default     = "spring-petclinic-microservices"
+}
+
 variable "openai_api_key" {
   description = "OpenAI API key for the dev genai-service, stored in Secrets Manager by the secrets module. Never commit a real value — set via TF_VAR_openai_api_key. Defaults to empty since genai-service is optional and not yet deployed (E-8)."
   type        = string

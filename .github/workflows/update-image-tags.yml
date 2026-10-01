@@ -1,0 +1,82 @@
+# Update Image Tags (PETPLAT-50, PETPLAT-87) — CI only, no deploy here.
+#
+# Triggered by a repository_dispatch event fired FROM the application repo's
+# build-push.yml (PETPLAT-49) once it has pushed new images to ECR. We do not
+# trigger off workflow_run: this workflow has no visibility into another
+# repo's runs, only into events explicitly dispatched to this repo.
+#
+# Expected payload (client_payload):
+#   sha:      the commit SHA image tag that was just pushed to ECR
+#   services: space-separated list of the services that were actually
+#             rebuilt, e.g. "customers-service vets-service" — NOT all 8.
+#             Only those services' helm-values/{service}.yaml get updated;
+#             matches PETPLAT-49/50/87's "not all 8 every push" design.
+#
+# No AWS credentials/OIDC needed here — this workflow only edits YAML in
+# this repo and pushes the commit. ArgoCD (watching this repo) picks up the
+# change and syncs — this workflow never runs kubectl/helm against a cluster.
+name: Update Image Tags
+
+on:
+  repository_dispatch:
+    types: [app-image-built]
+
+permissions:
+  contents: write
+
+env:
+  YQ_VERSION: v4.44.3
+
+jobs:
+  update-tags:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout platform repo
+        uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          sudo curl -sL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" -o /usr/local/bin/yq
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+
+      - name: Validate payload
+        env:
+          SHA: ${{ github.event.client_payload.sha }}
+          SERVICES: ${{ github.event.client_payload.services }}
+        run: |
+          if [ -z "${SHA}" ] || [ -z "${SERVICES}" ]; then
+            echo "::error::repository_dispatch payload missing sha or services (client_payload=${{ toJson(github.event.client_payload) }})"
+            exit 1
+          fi
+
+      - name: Update image.tag for changed services
+        env:
+          SHA: ${{ github.event.client_payload.sha }}
+          SERVICES: ${{ github.event.client_payload.services }}
+        run: |
+          for service in ${SERVICES}; do
+            values_file="helm-values/${service}.yaml"
+            if [ ! -f "${values_file}" ]; then
+              echo "::error::${values_file} does not exist — check the service name in the dispatch payload"
+              exit 1
+            fi
+            yq -i --arg sha "${SHA}" '.image.tag = $sha' "${values_file}"
+          done
+
+      - name: Commit and push
+        env:
+          SHA: ${{ github.event.client_payload.sha }}
+          SERVICES: ${{ github.event.client_payload.services }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add helm-values/
+          if git diff --staged --quiet; then
+            echo "No changes to commit (image tags already at ${SHA})"
+            exit 0
+          fi
+          # Matches technical-spec.md#image-tag-update-mechanism's documented
+          # format exactly: "ci: update image tags to {sha} ({service-list})".
+          git commit -m "ci: update image tags to ${SHA} (${SERVICES})"
+          git push

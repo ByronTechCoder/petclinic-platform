@@ -109,6 +109,25 @@ module "secrets" {
   openai_api_key = var.openai_api_key
 }
 
+# --- GitHub Actions OIDC federation (PETPLAT-52) ---
+# Account-wide (one GitHub OIDC provider per account), so this is called
+# from dev ONLY — never add this module to environments/prod/main.tf too, or
+# the second apply fails with "EntityAlreadyExists" on the OIDC provider.
+# build-push.yml (the app repo's CI) only pushes to petclinic-dev's ECR
+# repos today (technical-spec.md#build-steps-build-pushyml), so scoping the
+# push policy to this environment's repos is correct, not a shortcut.
+module "github_oidc" {
+  source = "../../modules/github-oidc"
+
+  github_org          = var.github_actions_org
+  github_repo         = var.github_actions_repo
+  ecr_repository_arns = values(module.ecr.repository_arns)
+
+  tags = {
+    Environment = "shared" # account-wide resource, not dev-specific — see module comment above
+  }
+}
+
 # --- ALB alias record (PETPLAT-31) ---
 # The AWS Load Balancer Controller (installed via scripts/install-lb-controller.sh,
 # see the eks module's lb_controller_role_arn output) provisions the ALB when

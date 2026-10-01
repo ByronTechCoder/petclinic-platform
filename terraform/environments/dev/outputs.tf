@@ -149,3 +149,8 @@ output "secrets_openai_secret_arn" {
   description = "Secrets Manager ARN for the dev OpenAI API key"
   value       = module.secrets.openai_secret_arn
 }
+
+output "github_actions_role_arn" {
+  description = "ARN of the GitHub Actions OIDC role (PETPLAT-52) — set this as the AWS_ROLE_ARN GitHub Secret in the application repo fork (spring-petclinic-microservices), for aws-actions/configure-aws-credentials in build-push.yml."
+  value       = module.github_oidc.role_arn
+}
