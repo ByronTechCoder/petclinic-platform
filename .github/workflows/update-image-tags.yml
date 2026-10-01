@@ -61,7 +61,13 @@ jobs:
               echo "::error::${values_file} does not exist — check the service name in the dispatch payload"
               exit 1
             fi
-            yq -i --arg sha "${SHA}" '.image.tag = $sha' "${values_file}"
+            # mikefarah/yq (Go-based, NOT jq) has no --arg flag — that's a
+            # jq-ism. Its equivalent for injecting an external, untrusted
+            # value without string-interpolating it into the expression
+            # itself is env()/strenv() (string-typed), reading the SHA env
+            # var set above. Caught live (2026-10-01): --arg failed with
+            # "Error: unknown flag: --arg" on the first real dispatch run.
+            yq -i '.image.tag = strenv(SHA)' "${values_file}"
           done
 
       - name: Commit and push
