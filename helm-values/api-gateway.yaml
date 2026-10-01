@@ -19,6 +19,9 @@ service:
 configMap:
   CONFIG_SERVER_URL: "http://config-server:8888"
   DISCOVERY_SERVER_URL: "http://discovery-server:8761"
+  # Higher than the chart default (helm/petclinic-service/values.yaml) — this
+  # is the only reactive/Netty service and handles all ingress traffic.
+  JAVA_TOOL_OPTIONS: "-Xmx192m -Xss256k -XX:MaxMetaspaceSize=112m -XX:ReservedCodeCacheSize=48m -XX:+UseSerialGC"
 
 initContainers:
   - name: wait-for-config-server
@@ -29,7 +32,7 @@ initContainers:
 resources:
   requests:
     cpu: 200m
-    memory: 128Mi
+    memory: 320Mi # Higher than the chart default (256Mi) to match its heavier JAVA_TOOL_OPTIONS above.
   limits:
     cpu: 1000m
     memory: 512Mi

@@ -623,16 +623,18 @@ The startupProbe runs first and disables readiness and liveness checks until Spr
 
 | Service | CPU Request | CPU Limit | Memory Request | Memory Limit |
 |---------|-------------|-----------|----------------|--------------|
-| config-server | 100m | 500m | 128Mi | 512Mi |
-| discovery-server | 100m | 500m | 128Mi | 512Mi |
-| api-gateway | 200m | 1000m | 128Mi | 512Mi |
-| customers-service | 100m | 500m | 128Mi | 512Mi |
-| visits-service | 100m | 500m | 128Mi | 512Mi |
-| vets-service | 100m | 500m | 128Mi | 512Mi |
-| genai-service | 100m | 500m | 128Mi | 512Mi |
-| admin-server | 100m | 500m | 128Mi | 512Mi |
+| config-server | 100m | 500m | 256Mi | 512Mi |
+| discovery-server | 100m | 500m | 256Mi | 512Mi |
+| api-gateway | 200m | 1000m | 320Mi | 512Mi |
+| customers-service | 100m | 500m | 384Mi | 640Mi |
+| visits-service | 100m | 500m | 384Mi | 640Mi |
+| vets-service | 100m | 500m | 384Mi | 640Mi |
+| genai-service | 100m | 500m | 384Mi | 640Mi |
+| admin-server | 100m | 500m | 256Mi | 512Mi |
 
-API Gateway gets higher CPU (200m/1000m) because it handles all incoming traffic routing. Memory requests are set to 128Mi (with 512Mi limit) to fit on t4g.small nodes (2 GiB RAM). Spring Boot services idle around 200-300 MiB — the 512Mi limit provides headroom for spikes.
+API Gateway gets higher CPU (200m/1000m) because it handles all incoming traffic routing. The four JPA/Hibernate-backed services (customers, visits, vets, genai — see JVM tuning note below) get higher memory than the other four: Hibernate's bytecode/proxy generation needs materially more metaspace than non-JPA services.
+
+> **Incident note (2026-10-01, two rounds):** memory requests were originally 128Mi across the board, on the (wrong) assumption that the 512Mi limit alone gave enough headroom. Real JVM usage idles at 200-380Mi — well above the 128Mi *request* used for scheduling — so the scheduler oversubscribed node memory: it packed pods as if each used 128Mi, but actual usage summed past what 2x t4g.small nodes (2 GiB RAM each) actually had, triggering kubelet eviction loops and, in one case, a node's kubelet dying outright under memory pressure. Dev's node count was bumped from 2 to 3 (`node_desired_size` in `terraform.tfvars`, see that file's comment) as one layer of headroom. Separately, `JAVA_TOOL_OPTIONS` (set via each service's `configMap` in `helm-values/`, picked up automatically by the JVM — no entrypoint change needed) now caps heap/metaspace/code-cache so real usage sits close to the request instead of 2-3x over it, and requests were raised to match. The first attempt used one shared cap (`-XX:MaxMetaspaceSize=96m`) for every service, which crashed `customers-service` and `vets-service` with `java.lang.OutOfMemoryError: Metaspace` — Hibernate's bytecode/proxy generation needs more metaspace than non-JPA services, even though the non-JPA services (config-server, discovery-server, admin-server, api-gateway) ran fine on it. Fix: a separate, higher `JAVA_TOOL_OPTIONS` (`-XX:MaxMetaspaceSize=224m`) and matching 384Mi/640Mi request/limit for the four JPA-backed services only (set per-service in their `helm-values/{service}.yaml`, not the chart default) — see `helm/petclinic-service/values.yaml` and `helm-values/customers-service.yaml` for the exact flags.
 
 ### Environment Variables per Service
 

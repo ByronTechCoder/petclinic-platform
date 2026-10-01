@@ -24,6 +24,11 @@ springProfilesActive: docker,mysql,production
 configMap:
   CONFIG_SERVER_URL: "http://config-server:8888"
   SPRING_DATASOURCE_URL: "jdbc:mysql://{rds-endpoint}:3306/petclinic"
+  # Higher than the chart default (helm/petclinic-service/values.yaml) —
+  # Hibernate's bytecode/proxy generation needs more metaspace than non-JPA
+  # services; 96m caused a Metaspace OOM crash in practice (2026-10-01 incident,
+  # see docs/technical-spec.md#resource-requests-and-limits).
+  JAVA_TOOL_OPTIONS: "-Xmx128m -Xss256k -XX:MaxMetaspaceSize=224m -XX:ReservedCodeCacheSize=48m -XX:+UseSerialGC"
 
 secretEnv:
   - name: SPRING_DATASOURCE_USERNAME
@@ -38,6 +43,14 @@ initContainers:
     url: http://config-server:8888/actuator/health
   - name: wait-for-discovery-server
     url: http://discovery-server:8761/actuator/health
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 384Mi # Higher than the chart default (256Mi) to match the JPA-tier JAVA_TOOL_OPTIONS above.
+  limits:
+    cpu: 500m
+    memory: 640Mi
 
 replicaCount: 2 # prod value (technical-spec.md#kubernetes-overlays, Prod Overlay table)
 

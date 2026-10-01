@@ -37,7 +37,16 @@ springProfilesActive: docker
 
 # Extra non-secret env vars, merged into this release's ConfigMap (envFrom).
 # e.g. CONFIG_SERVER_URL, DISCOVERY_SERVER_URL, GIT_REPO, SPRING_DATASOURCE_URL.
-configMap: {}
+# JAVA_TOOL_OPTIONS default below caps real JVM footprint (heap + metaspace +
+# code cache) close to resources.requests.memory below — the JVM picks this
+# env var up automatically (no entrypoint changes needed; see
+# docs/technical-spec.md#resource-requests-and-limits for the oversubscription
+# incident this fixes). UseSerialGC trades throughput for a smaller footprint,
+# appropriate for these low-concurrency services. api-gateway overrides this
+# with higher values (helm-values/api-gateway.yaml) since it's reactive/Netty
+# and handles all ingress traffic.
+configMap:
+  JAVA_TOOL_OPTIONS: "-Xmx128m -Xss256k -XX:MaxMetaspaceSize=96m -XX:ReservedCodeCacheSize=32m -XX:+UseSerialGC"
 
 # Secret-sourced env vars — name/secretName/secretKey must match an existing
 # K8s Secret (synced by External Secrets Operator from AWS Secrets Manager;
@@ -59,7 +68,7 @@ initContainers: []
 resources:
   requests:
     cpu: 100m
-    memory: 128Mi
+    memory: 256Mi # Matches real usage once JAVA_TOOL_OPTIONS (above) caps JVM footprint — was 128Mi, which undercounted actual ~200-380Mi usage and oversubscribed node memory (see docs/technical-spec.md#resource-requests-and-limits).
   limits:
     cpu: 500m
     memory: 512Mi
