@@ -125,15 +125,9 @@ variable "create_alb_alias_record" {
   default     = false
 }
 
-variable "github_actions_org" {
-  description = "GitHub org/username that owns the application repo fork (spring-petclinic-microservices), used in the OIDC trust policy (PETPLAT-52). Must be the real value — derive it with `git -C ../spring-petclinic-microservices remote get-url origin`, never hardcode a placeholder. Set in terraform.tfvars (not committed)."
+variable "github_actions_sub_prefix" {
+  description = "OIDC subject claim prefix for the application repo fork (spring-petclinic-microservices), used in the OIDC trust policy (PETPLAT-52). Must be the real value for this exact repo — derive it with `gh api repos/{org}/spring-petclinic-microservices/actions/oidc/customization/sub --jq '.sub_claim_prefix'` (NOT just \"repo:{org}/spring-petclinic-microservices\" — see terraform/modules/github-oidc/variables.tf's github_sub_prefix description for why that guess fails). Set in terraform.tfvars (not committed)."
   type        = string
-}
-
-variable "github_actions_repo" {
-  description = "Application repo name the OIDC trust policy is scoped to (not this platform repo)."
-  type        = string
-  default     = "spring-petclinic-microservices"
 }
 
 variable "openai_api_key" {

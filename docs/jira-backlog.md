@@ -2899,13 +2899,15 @@ Install ArgoCD on the EKS cluster in a dedicated `argocd` namespace. Include the
 **Technical Spec:** [GitOps with ArgoCD](./technical-spec.md#gitops-with-argocd)
 
 **Acceptance Criteria:**
-- [ ] ArgoCD installed in `argocd` namespace using official manifests
-- [ ] Installation manifests stored at `k8s/argocd/install/`
-- [ ] ArgoCD server, repo-server, application-controller, Redis all running and healthy
-- [ ] ArgoCD CLI (`argocd`) can connect to the cluster
-- [ ] ArgoCD UI accessible via port-forward (`kubectl port-forward svc/argocd-server -n argocd 8443:443`)
-- [ ] Initial admin password retrieved and documented
-- [ ] ArgoCD version pinned to a specific release
+- [ ] ArgoCD installed in `argocd` namespace using official manifests — ⏸ **on hold:** infra is destroyed (nightly teardown cycle); manifests are ready to apply once dev is redeployed
+- [x] Installation manifests stored at `k8s/argocd/install/`
+- [ ] ArgoCD server, repo-server, application-controller, Redis all running and healthy — ⏸ on hold, same reason
+- [ ] ArgoCD CLI (`argocd`) can connect to the cluster — ⏸ on hold, same reason
+- [ ] ArgoCD UI accessible via port-forward (`kubectl port-forward svc/argocd-server -n argocd 8443:443`) — ⏸ on hold, same reason
+- [ ] Initial admin password retrieved and documented — ⏸ on hold, same reason (can't retrieve a secret from a cluster that doesn't exist)
+- [x] ArgoCD version pinned to a specific release — `v3.5.3` (the `stable` channel's current release as of 2026-10-02, captured verbatim in the downloaded `install.yaml`)
+
+**Status (2026-10-02):** `k8s/argocd/install/namespace.yaml` and `install.yaml` (downloaded unmodified from `argoproj/argo-cd`'s `stable` manifests, per-instructions) are committed and validated via `kubectl apply --dry-run=client` against a local cluster. Live-install verification is blocked until dev is redeployed — see PETPLAT-116.
 
 ---
 
@@ -2924,14 +2926,16 @@ Create ArgoCD Application CRDs for all 8 Petclinic services in the dev environme
 **Technical Spec:** [GitOps with ArgoCD](./technical-spec.md#gitops-with-argocd), [Helm Charts](./technical-spec.md#helm-charts)
 
 **Acceptance Criteria:**
-- [ ] ArgoCD Application manifests at `k8s/argocd/applications/dev/` (one per service)
-- [ ] Each Application points to the Helm chart at `helm/petclinic-service/`
-- [ ] Each Application uses values files: `helm-values/{service}.yaml` + `helm-values/dev.yaml`
-- [ ] Sync policy: `automated` with `selfHeal: true` and `prune: true`
-- [ ] Destination namespace: `petclinic-dev`
-- [ ] Source repo: petclinic-platform Git URL
-- [ ] All 8 applications visible and synced in ArgoCD UI
-- [ ] Verified: push a tag change → ArgoCD auto-syncs → new image deployed
+- [x] ArgoCD Application manifests at `k8s/argocd/applications/dev/` (one per service)
+- [x] Each Application points to the Helm chart at `helm/petclinic-service/`
+- [x] Each Application uses values files: `helm-values/{service}.yaml` + `helm-values/dev.yaml`
+- [x] Sync policy: `automated` with `selfHeal: true` and `prune: true`
+- [x] Destination namespace: `petclinic-dev`
+- [x] Source repo: petclinic-platform Git URL (`https://github.com/ByronTechCoder/petclinic-platform.git`, from `git remote get-url origin` — not hardcoded/placeholder)
+- [ ] All 8 applications visible and synced in ArgoCD UI — ⏸ **on hold:** infra is destroyed, needs a live ArgoCD + dev cluster (PETPLAT-112)
+- [ ] Verified: push a tag change → ArgoCD auto-syncs → new image deployed — ⏸ on hold, same reason — this is PETPLAT-116
+
+**Status (2026-10-02):** All 8 manifests created and validated via `kubectl apply --dry-run=client` (structurally valid `Application` objects). Live verification deferred to PETPLAT-116 until dev is redeployed.
 
 ---
 
@@ -2950,13 +2954,15 @@ Create ArgoCD Application CRDs for all 8 Petclinic services in the prod environm
 **Technical Spec:** [GitOps with ArgoCD](./technical-spec.md#gitops-with-argocd), [Helm Charts](./technical-spec.md#helm-charts)
 
 **Acceptance Criteria:**
-- [ ] ArgoCD Application manifests at `k8s/argocd/applications/prod/` (one per service)
-- [ ] Each Application points to the Helm chart at `helm/petclinic-service/`
-- [ ] Each Application uses values files: `helm-values/{service}.yaml` + `helm-values/prod.yaml`
-- [ ] Sync policy: `manual` (no automated sync — requires explicit `argocd app sync` or UI click)
-- [ ] Destination namespace: `petclinic-prod`
-- [ ] All 8 applications visible in ArgoCD UI as `OutOfSync` until manually synced
-- [ ] Verified: manual sync deploys correctly to prod
+- [x] ArgoCD Application manifests at `k8s/argocd/applications/prod/` (one per service)
+- [x] Each Application points to the Helm chart at `helm/petclinic-service/`
+- [x] Each Application uses values files: `helm-values/{service}.yaml` + `helm-values/prod.yaml`
+- [x] Sync policy: `manual` (no `syncPolicy.automated` block at all — requires explicit `argocd app sync` or UI click)
+- [x] Destination namespace: `petclinic-prod`
+- [ ] All 8 applications visible in ArgoCD UI as `OutOfSync` until manually synced — ⏸ **on hold:** infra is destroyed, needs a live ArgoCD + prod cluster (PETPLAT-112)
+- [ ] Verified: manual sync deploys correctly to prod — ⏸ on hold, same reason — this is PETPLAT-116
+
+**Status (2026-10-02):** All 8 manifests created and validated via `kubectl apply --dry-run=client`. Live verification deferred to PETPLAT-116 until infra is redeployed.
 
 ---
 
@@ -2975,13 +2981,15 @@ Configure ArgoCD RBAC policies, user access, and security settings. Restrict who
 **Technical Spec:** [GitOps with ArgoCD](./technical-spec.md#gitops-with-argocd)
 
 **Acceptance Criteria:**
-- [ ] ArgoCD RBAC configured via argocd-rbac-cm ConfigMap
-- [ ] Admin role can manage all applications and settings
-- [ ] Developer role can view all applications but only sync dev environment
-- [ ] Prod sync restricted to admin role (additional safety for manual sync)
-- [ ] Default admin password changed from initial auto-generated value
-- [ ] SSO integration documented as optional future enhancement
-- [ ] RBAC configuration stored at `k8s/argocd/argocd-rbac-cm.yaml`
+- [x] ArgoCD RBAC configured via argocd-rbac-cm ConfigMap
+- [x] Admin role can manage all applications and settings (`role:admin` — wildcard access to applications/clusters/repositories/projects/accounts/certificates/gpgkeys/logs/exec)
+- [x] Developer role can view all applications but only sync dev environment (`role:developer` — `get` on `*/*`, `sync`/`action` only on `*/*-dev`)
+- [x] Prod sync restricted to admin role (no grant to `role:developer` for `*/*-prod` sync — deny-by-default enforces this without an explicit deny rule)
+- [ ] Default admin password changed from initial auto-generated value — ⏸ **on hold:** this is an operational step (`argocd account update-password`), not expressible in a static manifest — requires a live ArgoCD instance; infra is destroyed
+- [x] SSO integration documented as optional future enhancement (see comment block in `argocd-rbac-cm.yaml`)
+- [x] RBAC configuration stored at `k8s/argocd/argocd-rbac-cm.yaml`
+
+**Status (2026-10-02):** RBAC ConfigMap created and validated via `kubectl apply --dry-run=client`. The admin-password-change step is a manual, one-time operational action to perform once ArgoCD is actually installed (PETPLAT-112) — tracked there, not here.
 
 ---
 
@@ -3006,6 +3014,8 @@ Test the complete GitOps loop: CI builds and pushes image → CI updates image t
 - [ ] ArgoCD health checks pass for all services after sync
 - [ ] Sync history visible in ArgoCD UI showing deployment timeline
 - [ ] Time from commit to running pod documented (target: < 10 min for dev)
+
+**Status (2026-10-02): ⏸ ON HOLD — explicitly deferred by request.** Infra (dev EKS cluster) is currently destroyed per the nightly teardown cycle. None of this story's acceptance criteria are achievable without a live cluster + live ArgoCD install (PETPLAT-112) + live Application CRDs actually synced (PETPLAT-113/114). Resume this story once dev is redeployed and ArgoCD is installed — at that point also revisit the now-ready-but-unverified items flagged "on hold" in PETPLAT-112 through PETPLAT-115 above.
 
 ---
 

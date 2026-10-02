@@ -1,0 +1,29 @@
+# discovery-server — dev Application CRD (PETPLAT-113). Auto-sync: any change to
+# helm-values/discovery-server.yaml or helm-values/dev.yaml on main deploys automatically.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: discovery-server-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ByronTechCoder/petclinic-platform.git
+    targetRevision: main
+    path: helm/petclinic-service
+    helm:
+      releaseName: discovery-server
+      valueFiles:
+        - ../../helm-values/discovery-server.yaml
+        - ../../helm-values/dev.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: petclinic-dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+      - ApplyOutOfSyncOnly=true

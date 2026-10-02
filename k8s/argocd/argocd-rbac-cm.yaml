@@ -1,0 +1,58 @@
+# ArgoCD RBAC policy (PETPLAT-115). Applied as a ConfigMap overlay —
+# ArgoCD's argocd-rbac-cm ships empty from install.yaml; this REPLACES it
+# (same namespace/name) once installed.
+#
+# Two roles:
+#   - role:admin     — full access to applications, clusters, repositories,
+#                      projects, accounts, certificates, gpg keys, logs, exec.
+#   - role:developer — can view every Application (dev and prod), but can
+#                      only sync/action the *-dev ones. Prod sync is NOT
+#                      granted to role:developer at all — deny-by-default
+#                      means there is no path for developer to sync a
+#                      *-prod Application, satisfying "prod sync restricted
+#                      to admin role" without an explicit deny rule.
+#
+# Both dev and prod Applications share spec.project: default (see
+# k8s/argocd/applications/{dev,prod}/) — environment is distinguished by the
+# `-dev`/`-prod` name suffix, so the policy matches on `*/*-dev` /
+# `*/*-prod` application-name patterns rather than by project.
+#
+# policy.default: role:developer means any authenticated user NOT explicitly
+# mapped below (via a `g, ...` line) gets the read-only-plus-dev-sync
+# developer role, not admin — new users/SSO identities are safe by default.
+#
+# MANUAL STEPS NOT CAPTURED HERE (can't be done from a YAML file):
+#   - Change the default admin password after first login:
+#     `argocd account update-password` (or via the UI), per PETPLAT-115.
+#   - SSO integration (Dex/OIDC) is intentionally not configured — local
+#     admin/developer accounts are sufficient for this project's current
+#     scale. See https://argo-cd.readthedocs.io/en/stable/operator-manual/sso/
+#     if/when that becomes worth adding; this file's role definitions
+#     (role:admin / role:developer) would carry over unchanged — only the
+#     `g, <subject>, role:...` mappings would need SSO group/user entries.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-rbac-cm
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: argocd
+data:
+  policy.default: role:developer
+  policy.csv: |
+    p, role:admin, applications, *, */*, allow
+    p, role:admin, clusters, *, *, allow
+    p, role:admin, repositories, *, *, allow
+    p, role:admin, projects, *, *, allow
+    p, role:admin, certificates, *, *, allow
+    p, role:admin, accounts, *, *, allow
+    p, role:admin, gpgkeys, *, *, allow
+    p, role:admin, logs, get, */*, allow
+    p, role:admin, exec, create, */*, allow
+
+    p, role:developer, applications, get, */*, allow
+    p, role:developer, logs, get, */*-dev, allow
+    p, role:developer, applications, sync, */*-dev, allow
+    p, role:developer, applications, action/*, */*-dev, allow
+
+    g, admin, role:admin

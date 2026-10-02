@@ -119,8 +119,7 @@ module "secrets" {
 module "github_oidc" {
   source = "../../modules/github-oidc"
 
-  github_org          = var.github_actions_org
-  github_repo         = var.github_actions_repo
+  github_sub_prefix   = var.github_actions_sub_prefix
   ecr_repository_arns = values(module.ecr.repository_arns)
 
   tags = {

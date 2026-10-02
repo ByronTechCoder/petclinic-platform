@@ -1,0 +1,27 @@
+# vets-service — prod Application CRD (PETPLAT-114). Manual sync only — no
+# syncPolicy.automated block, so ArgoCD shows OutOfSync and waits for an
+# explicit `argocd app sync vets-service-prod` or a click in the ArgoCD UI.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vets-service-prod
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ByronTechCoder/petclinic-platform.git
+    targetRevision: main
+    path: helm/petclinic-service
+    helm:
+      releaseName: vets-service
+      valueFiles:
+        - ../../helm-values/vets-service.yaml
+        - ../../helm-values/prod.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: petclinic-prod
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+      - ApplyOutOfSyncOnly=true
