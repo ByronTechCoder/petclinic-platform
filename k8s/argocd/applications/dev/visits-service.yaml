@@ -1,5 +1,8 @@
 # visits-service — dev Application CRD (PETPLAT-113). Auto-sync: any change to
 # helm-values/visits-service.yaml or helm-values/dev.yaml on main deploys automatically.
+# The RDS JDBC URL is injected via helm.parameters below (helm-values keeps a
+# {rds-endpoint} placeholder). Refresh it after every environment rebuild:
+# terraform -chdir=terraform/environments/dev output -raw rds_endpoint
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -13,6 +16,10 @@ spec:
     path: helm/petclinic-service
     helm:
       releaseName: visits-service
+      parameters:
+        - name: configMap.SPRING_DATASOURCE_URL
+          value: jdbc:mysql://petclinic-dev-mysql.cp8ue2qe0x9i.eu-central-1.rds.amazonaws.com:3306/petclinic
+          forceString: true
       valueFiles:
         - ../../helm-values/visits-service.yaml
         - ../../helm-values/dev.yaml

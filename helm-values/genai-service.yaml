@@ -3,17 +3,11 @@
 # has JPA + MySQL dependencies but ships no schema files, so there's
 # nothing for it to connect to yet (see k8s/base/genai-service/deployment.yaml).
 #
-# KNOWN ISSUE (deferred, 2026-10-01): despite no SPRING_DATASOURCE_URL being
-# set here, this service still crash-loops in practice with
-# `Access denied for user 'ubuntu'@...` — it inherits a shared
-# spring.datasource property from the upstream Spring Cloud Config repo's
-# common `application.yml` profile (config.import: configserver:... pulls
-# that in for every service), and Hibernate auto-activates and fails to
-# authenticate. This service does NOT need RDS access — the fix should
-# EXCLUDE JPA/DataSource autoconfiguration (e.g. a
-# spring.autoconfigure.exclude env var for
-# HibernateJpaAutoConfiguration/DataSourceAutoConfiguration), not wire real
-# RDS credentials like the other three DB-backed services.
+# Autoconfiguration (2026-10-03): genai has no JPA entities or repositories and
+# does not use RDS. The shared Spring Cloud Config `application.yml` supplies a
+# spring.datasource property that auto-activated Hibernate and crash-looped the
+# pod (`Access denied for user 'ubuntu'`). JPA and DataSource autoconfiguration
+# are excluded below, so this service runs on the non-JPA sizing tier.
 #
 # Secret reference matches k8s/base/external-secrets/openai-api-key.yaml's
 # target exactly: K8s Secret "openai-api-key", key "OPENAI_API_KEY".
@@ -36,12 +30,7 @@ springProfilesActive: docker,production
 
 configMap:
   CONFIG_SERVER_URL: "http://config-server:8888"
-  # Higher than the chart default (helm/petclinic-service/values.yaml) — this
-  # service has JPA+MySQL on its classpath (see this file's header comment),
-  # and Hibernate's bytecode/proxy generation needs more metaspace than
-  # non-JPA services; 96m caused a Metaspace OOM crash in practice
-  # (2026-10-01 incident, see docs/technical-spec.md#resource-requests-and-limits).
-  JAVA_TOOL_OPTIONS: "-Xmx128m -Xss256k -XX:MaxMetaspaceSize=224m -XX:ReservedCodeCacheSize=48m -XX:+UseSerialGC"
+  SPRING_AUTOCONFIGURE_EXCLUDE: "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration,org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration"
 
 secretEnv:
   - name: OPENAI_API_KEY
@@ -54,13 +43,6 @@ initContainers:
   - name: wait-for-discovery-server
     url: http://discovery-server:8761/actuator/health
 
-resources:
-  requests:
-    cpu: 100m
-    memory: 384Mi # Higher than the chart default (256Mi) to match the JPA-tier JAVA_TOOL_OPTIONS above.
-  limits:
-    cpu: 500m
-    memory: 640Mi
 
 replicaCount: 1 # prod value (technical-spec.md#kubernetes-overlays, Prod Overlay table)
 

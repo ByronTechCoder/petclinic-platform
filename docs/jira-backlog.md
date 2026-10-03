@@ -2899,12 +2899,12 @@ Install ArgoCD on the EKS cluster in a dedicated `argocd` namespace. Include the
 **Technical Spec:** [GitOps with ArgoCD](./technical-spec.md#gitops-with-argocd)
 
 **Acceptance Criteria:**
-- [ ] ArgoCD installed in `argocd` namespace using official manifests — ⏸ **on hold:** infra is destroyed (nightly teardown cycle); manifests are ready to apply once dev is redeployed
+- [x] ArgoCD installed in `argocd` namespace using official manifests (2026-10-03: `kubectl apply --server-side -n argocd -f install.yaml`; all deployments and the application-controller StatefulSet Ready)
 - [x] Installation manifests stored at `k8s/argocd/install/`
-- [ ] ArgoCD server, repo-server, application-controller, Redis all running and healthy — ⏸ on hold, same reason
-- [ ] ArgoCD CLI (`argocd`) can connect to the cluster — ⏸ on hold, same reason
-- [ ] ArgoCD UI accessible via port-forward (`kubectl port-forward svc/argocd-server -n argocd 8443:443`) — ⏸ on hold, same reason
-- [ ] Initial admin password retrieved and documented — ⏸ on hold, same reason (can't retrieve a secret from a cluster that doesn't exist)
+- [x] ArgoCD server, repo-server, application-controller, Redis all running and healthy (2026-10-03)
+- [x] ArgoCD CLI (`argocd`) can connect to the cluster (2026-10-03: `argocd login` via port-forward succeeded)
+- [x] ArgoCD UI accessible via port-forward (2026-10-03: HTTP 200 on localhost:8443)
+- [x] Initial admin password retrieved (from `argocd-initial-admin-secret`). Deliberately NOT recorded in the repo; read it with `kubectl get secret argocd-initial-admin-secret -n argocd` when needed
 - [x] ArgoCD version pinned to a specific release — `v3.5.3` (the `stable` channel's current release as of 2026-10-02, captured verbatim in the downloaded `install.yaml`)
 
 **Status (2026-10-02):** `k8s/argocd/install/namespace.yaml` and `install.yaml` (downloaded unmodified from `argoproj/argo-cd`'s `stable` manifests, per-instructions) are committed and validated via `kubectl apply --dry-run=client` against a local cluster. Live-install verification is blocked until dev is redeployed — see PETPLAT-116.
@@ -2959,10 +2959,12 @@ Create ArgoCD Application CRDs for all 8 Petclinic services in the prod environm
 - [x] Each Application uses values files: `helm-values/{service}.yaml` + `helm-values/prod.yaml`
 - [x] Sync policy: `manual` (no `syncPolicy.automated` block at all — requires explicit `argocd app sync` or UI click)
 - [x] Destination namespace: `petclinic-prod`
-- [ ] All 8 applications visible in ArgoCD UI as `OutOfSync` until manually synced — ⏸ **on hold:** infra is destroyed, needs a live ArgoCD + prod cluster (PETPLAT-112)
-- [ ] Verified: manual sync deploys correctly to prod — ⏸ on hold, same reason — this is PETPLAT-116
+- [x] All 8 applications visible in ArgoCD as `OutOfSync` until manually synced (2026-10-03: 8 `*-prod` Applications `OutOfSync`/`Missing`, nothing synced)
+- [ ] Verified: manual sync deploys correctly to prod — ⏸ on hold until PETPLAT-116's prod sync test is run (not run yet; syncing prod is deliberately deferred)
 
 **Status (2026-10-02):** All 8 manifests created and validated via `kubectl apply --dry-run=client`. Live verification deferred to PETPLAT-116 until infra is redeployed.
+
+**Rebuild note (2026-10-03):** On future environment rebuilds, defer applying these prod Applications until prod is actually deployed (after dev is finished). They only show OutOfSync/Missing until then.
 
 ---
 
@@ -2981,10 +2983,10 @@ Configure ArgoCD RBAC policies, user access, and security settings. Restrict who
 **Technical Spec:** [GitOps with ArgoCD](./technical-spec.md#gitops-with-argocd)
 
 **Acceptance Criteria:**
-- [x] ArgoCD RBAC configured via argocd-rbac-cm ConfigMap
-- [x] Admin role can manage all applications and settings (`role:admin` — wildcard access to applications/clusters/repositories/projects/accounts/certificates/gpgkeys/logs/exec)
-- [x] Developer role can view all applications but only sync dev environment (`role:developer` — `get` on `*/*`, `sync`/`action` only on `*/*-dev`)
-- [x] Prod sync restricted to admin role (no grant to `role:developer` for `*/*-prod` sync — deny-by-default enforces this without an explicit deny rule)
+- [x] ArgoCD RBAC configured via argocd-rbac-cm ConfigMap (applied to the live cluster 2026-10-03)
+- [x] Admin role can manage all applications and settings (verified 2026-10-03 with `argocd admin settings rbac can`: admin sync prod = Yes, admin create clusters = Yes; `role:admin` — wildcard access to applications/clusters/repositories/projects/accounts/certificates/gpgkeys/logs/exec)
+- [x] Developer role can view all applications but only sync dev environment (verified 2026-10-03: developer get prod = Yes, sync dev = Yes; `role:developer` — `get` on `*/*`, `sync`/`action` only on `*/*-dev`)
+- [x] Prod sync restricted to admin role (verified 2026-10-03: developer sync prod = No; no grant to `role:developer` for `*/*-prod` sync — deny-by-default enforces this without an explicit deny rule)
 - [ ] Default admin password changed from initial auto-generated value — ⏸ **on hold:** this is an operational step (`argocd account update-password`), not expressible in a static manifest — requires a live ArgoCD instance; infra is destroyed
 - [x] SSO integration documented as optional future enhancement (see comment block in `argocd-rbac-cm.yaml`)
 - [x] RBAC configuration stored at `k8s/argocd/argocd-rbac-cm.yaml`
