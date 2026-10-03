@@ -14,6 +14,7 @@
 
 image:
   repositorySuffix: visits-service
+  tag: v1.0.0
 
 component: service
 

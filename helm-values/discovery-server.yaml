@@ -9,6 +9,7 @@
 
 image:
   repositorySuffix: discovery-server
+  tag: v1.0.0
 
 component: server
 

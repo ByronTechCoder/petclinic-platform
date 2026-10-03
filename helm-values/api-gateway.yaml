@@ -10,6 +10,7 @@
 
 image:
   repositorySuffix: api-gateway
+  tag: v1.0.0
 
 component: gateway
 

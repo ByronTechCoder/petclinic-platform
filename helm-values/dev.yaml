@@ -20,7 +20,8 @@ namespace: petclinic-dev
 
 image:
   registry: 771174261648.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev
-  tag: v1.0.0 # Matches k8s/overlays/dev's current tag. Real deployments should override with --set image.tag=<sha> once CI (E-10) exists.
+  # tag is set per service in helm-values/{service}.yaml (CI updates it there);
+  # it must not be set here, or it overrides the service's tag.
 
 replicaCount: 1
 

@@ -20,6 +20,7 @@
 
 image:
   repositorySuffix: customers-service
+  tag: v1.0.0
 
 component: service
 

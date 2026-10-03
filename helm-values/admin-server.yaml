@@ -9,7 +9,7 @@
 
 image:
   repositorySuffix: admin-server
-  tag: 789d9ac
+  tag: v1.0.0
 component: admin
 service:
   port: 9090
