@@ -13,7 +13,7 @@
 
 image:
   repositorySuffix: vets-service
-  tag: bdbc8fa
+  tag: c4842bd
 component: service
 service:
   port: 8083
