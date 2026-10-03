@@ -13,15 +13,11 @@
 
 image:
   repositorySuffix: vets-service
-  tag: v1.0.0
-
+  tag: c4842bd
 component: service
-
 service:
   port: 8083
-
 springProfilesActive: docker,mysql,production
-
 configMap:
   CONFIG_SERVER_URL: "http://config-server:8888"
   SPRING_DATASOURCE_URL: "jdbc:mysql://{rds-endpoint}:3306/petclinic"
@@ -30,7 +26,6 @@ configMap:
   # services; 96m caused a Metaspace OOM crash in practice (2026-10-01 incident,
   # see docs/technical-spec.md#resource-requests-and-limits).
   JAVA_TOOL_OPTIONS: "-Xmx128m -Xss256k -XX:MaxMetaspaceSize=224m -XX:ReservedCodeCacheSize=48m -XX:+UseSerialGC"
-
 secretEnv:
   - name: SPRING_DATASOURCE_USERNAME
     secretName: rds-credentials
@@ -38,13 +33,11 @@ secretEnv:
   - name: SPRING_DATASOURCE_PASSWORD
     secretName: rds-credentials
     secretKey: password
-
 initContainers:
   - name: wait-for-config-server
     url: http://config-server:8888/actuator/health
   - name: wait-for-discovery-server
     url: http://discovery-server:8761/actuator/health
-
 resources:
   requests:
     cpu: 100m
@@ -52,15 +45,12 @@ resources:
   limits:
     cpu: 500m
     memory: 640Mi
-
 replicaCount: 2 # prod value (technical-spec.md#kubernetes-overlays, Prod Overlay table)
-
 autoscaling:
   enabled: true
   minReplicas: 2
   maxReplicas: 4
   targetCPUUtilizationPercentage: 70
-
 podDisruptionBudget:
   enabled: true
   minAvailable: 1
