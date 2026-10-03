@@ -60,13 +60,13 @@ variable "node_min_size" {
 variable "node_max_size" {
   description = "Maximum number of dev worker nodes"
   type        = number
-  default     = 4
+  default     = 8
 }
 
 variable "node_desired_size" {
   description = "Desired number of dev worker nodes"
   type        = number
-  default     = 4
+  default     = 8
 }
 
 variable "service_names" {
