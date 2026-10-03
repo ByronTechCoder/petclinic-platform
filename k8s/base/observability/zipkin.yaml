@@ -1,0 +1,86 @@
+# Zipkin (PETPLAT-60). Deployed to the `tracing` namespace — the services send
+# spans to http://zipkin.tracing:9411/api/v2/spans (set in helm-values). Wrong
+# namespace means no traces arrive. In-memory storage: traces are lost on
+# restart, which is fine for dev.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zipkin
+  namespace: tracing
+  labels:
+    app.kubernetes.io/name: zipkin
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: zipkin
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: zipkin
+        app.kubernetes.io/part-of: petclinic
+        app.kubernetes.io/managed-by: kubectl
+        app.kubernetes.io/component: backend
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: zipkin
+          image: openzipkin/zipkin:3.4.1
+          env:
+            - name: STORAGE_TYPE
+              value: mem
+          ports:
+            - name: http
+              containerPort: 9411
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zipkin
+  namespace: tracing
+  labels:
+    app.kubernetes.io/name: zipkin
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+    app.kubernetes.io/component: backend
+spec:
+  selector:
+    app.kubernetes.io/name: zipkin
+  ports:
+    - name: http
+      port: 9411
+      targetPort: http

@@ -1,0 +1,26 @@
+# Observability namespaces (PETPLAT-55..60, PETPLAT-103). Zipkin lives in its
+# own `tracing` namespace so the services' trace endpoint is http://zipkin.tracing:9411.
+#
+# monitoring runs enforce=privileged, not baseline: FluentBit mounts host log
+# paths (hostPath volumes), which the baseline Pod Security level forbids. Only
+# FluentBit needs it; every other workload here still sets a restricted
+# securityContext.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    app.kubernetes.io/part-of: petclinic
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tracing
+  labels:
+    app.kubernetes.io/part-of: petclinic
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted

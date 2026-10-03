@@ -1,0 +1,181 @@
+# Grafana (PETPLAT-56, PETPLAT-57). Datasources are provisioned with pinned
+# uids (prometheus, loki) so the dashboard JSON resolves. Every panel target has
+# refId and datasource uid (Grafana 10+ requires both). Dashboards are generated
+# from a Python builder and embedded below — edit them there, not by hand.
+# Admin credentials come from the grafana-admin Secret, which must exist before
+# apply: kubectl -n monitoring create secret generic grafana-admin \
+#   --from-literal=admin-user=admin --from-literal=admin-password=<choose-one>
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+    app.kubernetes.io/component: backend
+data:
+  datasources.yaml: "apiVersion: 1\ndatasources:\n  - name: Prometheus\n    uid: prometheus\n    type: prometheus\n    access: proxy\n    url: http://prometheus:9090\n    isDefault: true\n  - name: Loki\n    uid: loki\n    type: loki\n    access: proxy\n    url: http://loki:3100\n"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-provider
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+    app.kubernetes.io/component: backend
+data:
+  provider.yaml: "apiVersion: 1\nproviders:\n  - name: petclinic\n    orgId: 1\n    folder: Petclinic\n    type: file\n    disableDeletion: true\n    options:\n      path: /var/lib/grafana/dashboards\n"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+    app.kubernetes.io/component: backend
+data:
+  petclinic-overview.json: "{\n  \"uid\": \"petclinic-overview\",\n  \"title\": \"Petclinic Service Overview\",\n  \"schemaVersion\": 39,\n  \"version\": 1,\n  \"editable\": true,\n  \"time\": {\n    \"from\": \"now-1h\",\n    \"to\": \"now\"\n  },\n  \"refresh\": \"30s\",\n  \"tags\": [\n    \"petclinic\"\n  ],\n  \"panels\": [\n    {\n      \"id\": 1,\n      \"title\": \"Services up\",\n      \"type\": \"stat\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 0,\n        \"w\": 6,\n        \"h\": 6\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"datasource\": {\n            \"type\": \"prometheus\",\n            \"uid\": \"prometheus\"\n          },\n          \"expr\": \"sum(up{job=~\\\"api-gateway|customers-service|visits-service|vets-service|genai-service\\\"})\",\n          \"editorMode\": \"code\",\n          \"instant\": true\n        }\n      ]\n    },\n    {\n      \"id\": 2,\n      \"title\": \"Request rate by service\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 6,\n        \"y\": 0,\n        \"w\": 18,\n        \"h\": 6\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"datasource\": {\n            \"type\": \"prometheus\",\n            \"uid\": \"prometheus\"\n          },\n          \"expr\": \"sum by (job) (rate(http_server_requests_seconds_count[5m]))\",\n          \"editorMode\": \"code\",\n          \"legendFormat\": \"{{job}}\",\n          \"range\": true\n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"reqps\"\n        },\n        \"overrides\": []\n      }\n    },\n    {\n      \"id\": 3,\n      \"title\": \"Error rate by service (5xx)\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 6,\n        \"w\": 12,\n        \"h\": 7\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"datasource\": {\n            \"type\": \"prometheus\",\n            \"uid\": \"prometheus\"\n          },\n          \"expr\": \"sum by (job) (rate(http_server_requests_seconds_count{status=~\\\"5..\\\"}[5m])) / sum by (job) (rate(http_server_requests_seconds_count[5m]))\",\n          \"editorMode\": \"code\",\n          \"legendFormat\": \"{{job}}\",\n          \"range\": true\n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"percentunit\"\n        },\n        \"overrides\": []\n      }\n    },\n    {\n      \"id\": 4,\n      \"title\": \"p95 latency by service\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 12,\n        \"y\": 6,\n        \"w\": 12,\n        \"h\": 7\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"datasource\": {\n            \"type\": \"prometheus\",\n            \"uid\": \"prometheus\"\n          },\n          \"expr\": \"histogram_quantile(0.95, sum by (job, le) (rate(http_server_requests_seconds_bucket[5m])))\",\n          \"editorMode\": \"code\",\n          \"legendFormat\": \"{{job}}\",\n          \"range\": true\n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"s\"\n        },\n        \"overrides\": []\n      }\n    }\n  ],\n  \"templating\": {\n    \"list\": []\n  }\n}"
+  petclinic-service-detail.json: "{\n  \"uid\": \"petclinic-service-detail\",\n  \"title\": \"Petclinic Service Detail\",\n  \"schemaVersion\": 39,\n  \"version\": 1,\n  \"editable\": true,\n  \"time\": {\n    \"from\": \"now-1h\",\n    \"to\": \"now\"\n  },\n  \"refresh\": \"30s\",\n  \"tags\": [\n    \"petclinic\"\n  ],\n  \"panels\": [\n    {\n      \"id\": 1,\n      \"title\": \"Request rate\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 0,\n        \"w\": 12,\n        \"h\": 7\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"datasource\": {\n            \"type\": \"prometheus\",\n            \"uid\": \"prometheus\"\n          },\n          \"expr\": \"sum by (uri, method) (rate(http_server_requests_seconds_count{job=\\\"$service\\\"}[5m]))\",\n          \"editorMode\": \"code\",\n          \"legendFormat\": \"{{method}} {{uri}}\",\n          \"range\": true\n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"reqps\"\n        },\n        \"overrides\": []\n      }\n    },\n    {\n      \"id\": 2,\n      \"title\": \"5xx rate\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 12,\n        \"y\": 0,\n        \"w\": 12,\n        \"h\": 7\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"datasource\": {\n            \"type\": \"prometheus\",\n            \"uid\": \"prometheus\"\n          },\n          \"expr\": \"sum(rate(http_server_requests_seconds_count{job=\\\"$service\\\",status=~\\\"5..\\\"}[5m]))\",\n          \"editorMode\": \"code\",\n          \"legendFormat\": \"5xx\",\n          \"range\": true\n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"reqps\"\n        },\n        \"overrides\": []\n      }\n    },\n    {\n      \"id\": 3,\n      \"title\": \"p95 latency\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 7,\n        \"w\": 12,\n        \"h\": 7\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"datasource\": {\n            \"type\": \"prometheus\",\n            \"uid\": \"prometheus\"\n          },\n          \"expr\": \"histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{job=\\\"$service\\\"}[5m])))\",\n          \"editorMode\": \"code\",\n          \"legendFormat\": \"p95\",\n          \"range\": true\n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"s\"\n        },\n        \"overrides\": []\n      }\n    },\n    {\n      \"id\": 4,\n      \"title\": \"JVM heap used\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 12,\n        \"y\": 7,\n        \"w\": 12,\n        \"h\": 7\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"datasource\": {\n            \"type\": \"prometheus\",\n            \"uid\": \"prometheus\"\n          },\n          \"expr\": \"sum(jvm_memory_used_bytes{job=\\\"$service\\\",area=\\\"heap\\\"})\",\n          \"editorMode\": \"code\",\n          \"legendFormat\": \"heap\",\n          \"range\": true\n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"bytes\"\n        },\n        \"overrides\": []\n      }\n    }\n  ],\n  \"templating\": {\n    \"list\": [\n      {\n        \"name\": \"service\",\n        \"type\": \"custom\",\n        \"label\": \"Service\",\n        \"query\": \"api-gateway,customers-service,visits-service,vets-service,genai-service\",\n        \"current\": {\n          \"text\": \"api-gateway\",\n          \"value\": \"api-gateway\"\n        },\n        \"options\": [\n          {\n            \"text\": \"api-gateway\",\n            \"value\": \"api-gateway\",\n            \"selected\": true\n          },\n          {\n            \"text\": \"customers-service\",\n            \"value\": \"customers-service\",\n            \"selected\": false\n          },\n          {\n            \"text\": \"visits-service\",\n            \"value\": \"visits-service\",\n            \"selected\": false\n          },\n          {\n            \"text\": \"vets-service\",\n            \"value\": \"vets-service\",\n            \"selected\": false\n          },\n          {\n            \"text\": \"genai-service\",\n            \"value\": \"genai-service\",\n            \"selected\": false\n          }\n        ]\n      }\n    ]\n  }\n}"
+  petclinic-jvm.json: "{\n  \"uid\": \"petclinic-jvm\",\n  \"title\": \"Petclinic JVM\",\n  \"schemaVersion\": 39,\n  \"version\": 1,\n  \"editable\": true,\n  \"time\": {\n    \"from\": \"now-1h\",\n    \"to\": \"now\"\n  },\n  \"refresh\": \"30s\",\n  \"tags\": [\n    \"petclinic\"\n  ],\n  \"panels\": [\n    {\n      \"id\": 1,\n      \"title\": \"Heap used by service\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 0,\n        \"w\": 12,\n        \"h\": 7\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"datasource\": {\n            \"type\": \"prometheus\",\n            \"uid\": \"prometheus\"\n          },\n          \"expr\": \"sum by (job) (jvm_memory_used_bytes{area=\\\"heap\\\"})\",\n          \"editorMode\": \"code\",\n          \"legendFormat\": \"{{job}}\",\n          \"range\": true\n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"bytes\"\n        },\n        \"overrides\": []\n      }\n    },\n    {\n      \"id\": 2,\n      \"title\": \"GC pause rate\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 12,\n        \"y\": 0,\n        \"w\": 12,\n        \"h\": 7\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"datasource\": {\n            \"type\": \"prometheus\",\n            \"uid\": \"prometheus\"\n          },\n          \"expr\": \"sum by (job) (rate(jvm_gc_pause_seconds_sum[5m]))\",\n          \"editorMode\": \"code\",\n          \"legendFormat\": \"{{job}}\",\n          \"range\": true\n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n          \"unit\": \"s\"\n        },\n        \"overrides\": []\n      }\n    },\n    {\n      \"id\": 3,\n      \"title\": \"Live threads\",\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 7,\n        \"w\": 12,\n        \"h\": 7\n      },\n      \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"datasource\": {\n            \"type\": \"prometheus\",\n            \"uid\": \"prometheus\"\n          },\n          \"expr\": \"sum by (job) (jvm_threads_live_threads)\",\n          \"editorMode\": \"code\",\n          \"legendFormat\": \"{{job}}\",\n          \"range\": true\n        }\n      ]\n    }\n  ],\n  \"templating\": {\n    \"list\": []\n  }\n}"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-data
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+    app.kubernetes.io/component: backend
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: gp2
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+  labels: &id001
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+  template:
+    metadata:
+      labels: *id001
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 472
+        fsGroup: 472
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: grafana
+        image: grafana/grafana:11.4.0
+        env:
+        - name: GF_SECURITY_ADMIN_USER
+          valueFrom:
+            secretKeyRef:
+              name: grafana-admin
+              key: admin-user
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: grafana-admin
+              key: admin-password
+        ports:
+        - name: http
+          containerPort: 3000
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/grafana
+        - name: datasources
+          mountPath: /etc/grafana/provisioning/datasources
+          readOnly: true
+        - name: dashboard-provider
+          mountPath: /etc/grafana/provisioning/dashboards
+          readOnly: true
+        - name: dashboards
+          mountPath: /var/lib/grafana/dashboards
+          readOnly: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: grafana-data
+      - name: datasources
+        configMap:
+          name: grafana-datasources
+      - name: dashboard-provider
+        configMap:
+          name: grafana-dashboard-provider
+      - name: dashboards
+        configMap:
+          name: grafana-dashboards
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+    app.kubernetes.io/component: backend
+spec:
+  selector:
+    app.kubernetes.io/name: grafana
+  ports:
+  - name: http
+    port: 3000
+    targetPort: http

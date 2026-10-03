@@ -18,6 +18,8 @@ service:
   port: 8080
 
 configMap:
+  MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: "http://zipkin.tracing:9411/api/v2/spans"
+  MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
   CONFIG_SERVER_URL: "http://config-server:8888"
   DISCOVERY_SERVER_URL: "http://discovery-server:8761"
   # Higher than the chart default (helm/petclinic-service/values.yaml) — this
