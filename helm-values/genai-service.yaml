@@ -20,35 +20,26 @@
 
 image:
   repositorySuffix: genai-service
-  tag: v1.0.0
-
+  tag: f68a10c
 component: service
-
 service:
   port: 8084
-
 springProfilesActive: docker,production
-
 configMap:
   MANAGEMENT_TRACING_EXPORT_ZIPKIN_ENDPOINT: "http://zipkin.tracing:9411/api/v2/spans"
   MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
   CONFIG_SERVER_URL: "http://config-server:8888"
   SPRING_AUTOCONFIGURE_EXCLUDE: "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration,org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration"
-
 secretEnv:
   - name: OPENAI_API_KEY
     secretName: openai-api-key
     secretKey: OPENAI_API_KEY
-
 initContainers:
   - name: wait-for-config-server
     url: http://config-server:8888/actuator/health
   - name: wait-for-discovery-server
     url: http://discovery-server:8761/actuator/health
-
-
 replicaCount: 1 # prod value (technical-spec.md#kubernetes-overlays, Prod Overlay table)
-
 autoscaling:
   enabled: true
   minReplicas: 1

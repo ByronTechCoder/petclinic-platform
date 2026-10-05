@@ -10,13 +10,10 @@
 
 image:
   repositorySuffix: api-gateway
-  tag: v1.0.0
-
+  tag: f68a10c
 component: gateway
-
 service:
   port: 8080
-
 configMap:
   MANAGEMENT_TRACING_EXPORT_ZIPKIN_ENDPOINT: "http://zipkin.tracing:9411/api/v2/spans"
   MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
@@ -25,13 +22,11 @@ configMap:
   # Higher than the chart default (helm/petclinic-service/values.yaml) — this
   # is the only reactive/Netty service and handles all ingress traffic.
   JAVA_TOOL_OPTIONS: "-Xmx192m -Xss256k -XX:MaxMetaspaceSize=112m -XX:ReservedCodeCacheSize=48m -XX:+UseSerialGC"
-
 initContainers:
   - name: wait-for-config-server
     url: http://config-server:8888/actuator/health
   - name: wait-for-discovery-server
     url: http://discovery-server:8761/actuator/health
-
 resources:
   requests:
     cpu: 200m
@@ -39,15 +34,12 @@ resources:
   limits:
     cpu: 1000m
     memory: 512Mi
-
 replicaCount: 2 # prod value (technical-spec.md#kubernetes-overlays, Prod Overlay table)
-
 autoscaling:
   enabled: true
   minReplicas: 2
   maxReplicas: 6
   targetCPUUtilizationPercentage: 70
-
 podDisruptionBudget:
   enabled: true
   minAvailable: 1

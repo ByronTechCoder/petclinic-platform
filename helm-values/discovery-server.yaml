@@ -9,22 +9,16 @@
 
 image:
   repositorySuffix: discovery-server
-  tag: v1.0.0
-
+  tag: f68a10c
 component: server
-
 service:
   port: 8761
-
 configMap:
   CONFIG_SERVER_URL: "http://config-server:8888"
-
 initContainers:
   - name: wait-for-config-server
     url: http://config-server:8888/actuator/health
-
 replicaCount: 2 # prod value (technical-spec.md#kubernetes-overlays, Prod Overlay table)
-
 podDisruptionBudget:
   enabled: true
   minAvailable: 1

@@ -10,13 +10,10 @@
 
 image:
   repositorySuffix: config-server
-  tag: v1.0.0
-
+  tag: f68a10c
 component: server
-
 service:
   port: 8888
-
 probes:
   startup:
     path: /actuator/health
@@ -33,13 +30,10 @@ probes:
     periodSeconds: 15
     timeoutSeconds: 5
     failureThreshold: 3
-
 configMap:
   GIT_REPO: "https://github.com/spring-petclinic/spring-petclinic-microservices-config"
   GIT_LABEL: "main"
-
 replicaCount: 2 # prod value (technical-spec.md#kubernetes-overlays, Prod Overlay table)
-
 podDisruptionBudget:
   enabled: true
   minAvailable: 1

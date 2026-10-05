@@ -20,15 +20,11 @@
 
 image:
   repositorySuffix: customers-service
-  tag: v1.0.0
-
+  tag: f68a10c
 component: service
-
 service:
   port: 8081
-
 springProfilesActive: docker,mysql
-
 configMap:
   MANAGEMENT_TRACING_EXPORT_ZIPKIN_ENDPOINT: "http://zipkin.tracing:9411/api/v2/spans"
   MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
@@ -39,7 +35,6 @@ configMap:
   # services; 96m caused a Metaspace OOM crash in practice (2026-10-01 incident,
   # see docs/technical-spec.md#resource-requests-and-limits).
   JAVA_TOOL_OPTIONS: "-Xmx128m -Xss256k -XX:MaxMetaspaceSize=224m -XX:ReservedCodeCacheSize=48m -XX:+UseSerialGC"
-
 secretEnv:
   - name: SPRING_DATASOURCE_USERNAME
     secretName: rds-credentials
@@ -47,13 +42,11 @@ secretEnv:
   - name: SPRING_DATASOURCE_PASSWORD
     secretName: rds-credentials
     secretKey: password
-
 initContainers:
   - name: wait-for-config-server
     url: http://config-server:8888/actuator/health
   - name: wait-for-discovery-server
     url: http://discovery-server:8761/actuator/health
-
 resources:
   requests:
     cpu: 100m
@@ -61,15 +54,12 @@ resources:
   limits:
     cpu: 500m
     memory: 640Mi
-
 replicaCount: 2 # prod value (technical-spec.md#kubernetes-overlays, Prod Overlay table)
-
 autoscaling:
   enabled: true
   minReplicas: 2
   maxReplicas: 4
   targetCPUUtilizationPercentage: 70
-
 podDisruptionBudget:
   enabled: true
   minAvailable: 1
