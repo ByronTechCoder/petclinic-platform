@@ -141,3 +141,8 @@ variable "budget_alert_email" {
   description = "Email address that receives AWS Budget alerts at 50%, 80%, and 100% of the monthly budget (PETPLAT-75). Required — set it in terraform.tfvars (not committed)."
   type        = string
 }
+
+variable "eks_public_access_cidrs" {
+  description = "CIDR blocks allowed to reach the public EKS API server endpoint (kubectl). No default on purpose — set it in terraform.tfvars (not committed). Does NOT affect website traffic, which enters only via the ALB."
+  type        = list(string)
+}

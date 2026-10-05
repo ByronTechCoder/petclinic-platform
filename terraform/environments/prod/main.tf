@@ -45,6 +45,8 @@ module "eks" {
   node_max_size       = var.node_max_size
   node_desired_size   = var.node_desired_size
 
+  cluster_endpoint_public_access_cidrs = var.eks_public_access_cidrs
+
   # The Terraform deployer's own principal already gets cluster-admin via
   # bootstrap_cluster_creator_admin_permissions. Grant the account root user
   # an access entry too, since it's a different IAM principal and the AWS

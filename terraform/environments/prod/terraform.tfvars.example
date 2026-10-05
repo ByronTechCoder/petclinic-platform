@@ -8,3 +8,6 @@ domain_name = "example.com"
 # unset (defaults to "", fine since genai-service is optional/not yet
 # deployed) or pass a real key via: TF_VAR_openai_api_key="sk-..." terraform apply
 # openai_api_key = ""
+
+# Operator IP(s) allowed to reach the public EKS API endpoint (kubectl).
+eks_public_access_cidrs = ["203.0.113.10/32"]
