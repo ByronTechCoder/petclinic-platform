@@ -1,0 +1,31 @@
+# Karpenter install (PETPLAT-73). Installed with Helm, not a raw manifest — the
+# controller and its CRDs come from the chart. Run this AFTER
+# `terraform apply` for the karpenter module, from terraform/environments/dev:
+#
+#   helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter \
+#     --version 1.7.0 \
+#     --namespace kube-system \
+#     --set settings.clusterName=petclinic-dev \
+#     --set settings.interruptionQueue=petclinic-dev-karpenter-interruption \
+#     --set 'serviceAccount.annotations.eks\.amazonaws\.com/role-arn=arn:aws:iam::771174261648:role/petclinic-dev-karpenter-role' \
+#     --set controller.resources.requests.cpu=250m \
+#     --set controller.resources.requests.memory=512Mi \
+#     --set controller.resources.limits.memory=512Mi
+#
+# Equivalent with values pulled from Terraform (names differ from the spec: the
+# dev root module exports eks_cluster_name, and the karpenter_* outputs):
+#
+#   helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter \
+#     --version 1.7.0 --namespace kube-system \
+#     --set settings.clusterName=$(terraform output -raw eks_cluster_name) \
+#     --set settings.interruptionQueue=$(terraform output -raw karpenter_queue_name) \
+#     --set 'serviceAccount.annotations.eks\.amazonaws\.com/role-arn='$(terraform output -raw karpenter_role_arn)
+#
+# Version note: chart 1.0.0 is incompatible with EKS 1.34 ("karpenter version is not
+# compatible with K8s version 1.34"), so the dev cluster runs 1.7.0. The chart ships
+# with empty controller resources, which makes Karpenter panic at startup, so explicit
+# requests are required.
+#
+# Then apply the NodePool and EC2NodeClass from nodepool.yaml.
+# The cluster's API server endpoint is discovered from the cluster itself, so no
+# settings.clusterEndpoint is needed for EKS.

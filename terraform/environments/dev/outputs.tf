@@ -154,3 +154,18 @@ output "github_actions_role_arn" {
   description = "ARN of the GitHub Actions OIDC role (PETPLAT-52) — set this as the AWS_ROLE_ARN GitHub Secret in the application repo fork (spring-petclinic-microservices), for aws-actions/configure-aws-credentials in build-push.yml."
   value       = module.github_oidc.role_arn
 }
+
+output "karpenter_role_arn" {
+  description = "Karpenter controller IRSA role ARN (serviceAccount annotation for the Helm install)"
+  value       = module.karpenter.karpenter_role_arn
+}
+
+output "karpenter_queue_name" {
+  description = "Karpenter SQS interruption queue name (settings.interruptionQueue)"
+  value       = module.karpenter.karpenter_queue_name
+}
+
+output "karpenter_instance_profile_name" {
+  description = "Instance profile for Karpenter-launched nodes (EC2NodeClass spec.instanceProfile)"
+  value       = module.karpenter.karpenter_instance_profile_name
+}

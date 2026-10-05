@@ -47,6 +47,7 @@ resource "aws_subnet" "public" {
   tags = merge(var.tags, {
     Name                                         = "${local.name_prefix}-public-${var.availability_zones[count.index]}"
     "kubernetes.io/cluster/${local.name_prefix}" = "shared"
+    "karpenter.sh/discovery"                     = local.name_prefix
     "kubernetes.io/role/elb"                     = "1"
   })
 }

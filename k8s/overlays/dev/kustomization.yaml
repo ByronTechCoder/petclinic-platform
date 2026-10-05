@@ -27,7 +27,7 @@ patches:
     patch: |-
       - op: replace
         path: /metadata/annotations/alb.ingress.kubernetes.io~1certificate-arn
-        value: arn:aws:acm:eu-central-1:771174261648:certificate/0c360777-e765-4ec7-a838-6560e25919be
+        value: arn:aws:acm:eu-central-1:771174261648:certificate/25b34790-ec42-49c6-8848-f76268bed1d8
       - op: replace
         path: /metadata/annotations/alb.ingress.kubernetes.io~1security-groups
-        value: sg-039e1d66c04df3fa1
+        value: sg-0ff94a359e33c8108

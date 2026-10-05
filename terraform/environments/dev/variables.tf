@@ -136,3 +136,8 @@ variable "openai_api_key" {
   sensitive   = true
   default     = ""
 }
+
+variable "budget_alert_email" {
+  description = "Email address that receives AWS Budget alerts at 50%, 80%, and 100% of the monthly budget (PETPLAT-75). Required — set it in terraform.tfvars (not committed)."
+  type        = string
+}

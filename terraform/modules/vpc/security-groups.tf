@@ -17,7 +17,8 @@ resource "aws_security_group" "eks_node" {
   vpc_id      = aws_vpc.this.id
 
   tags = merge(var.tags, {
-    Name = "${local.name_prefix}-eks-node-sg"
+    Name                     = "${local.name_prefix}-eks-node-sg"
+    "karpenter.sh/discovery" = local.name_prefix
   })
 }
 

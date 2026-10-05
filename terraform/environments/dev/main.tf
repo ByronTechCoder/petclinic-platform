@@ -157,3 +157,43 @@ resource "aws_route53_record" "alb_alias" {
     evaluate_target_health = true
   }
 }
+
+# --- Karpenter node autoscaling (PETPLAT-73) ---
+module "karpenter" {
+  source = "../../modules/karpenter"
+
+  project           = var.project
+  environment       = var.environment
+  cluster_name      = module.eks.cluster_name
+  oidc_provider_arn = module.eks.oidc_provider_arn
+  oidc_provider_url = module.eks.oidc_provider_url
+  node_role_arn     = module.eks.node_role_arn
+}
+
+# --- Monthly cost budget with email alerts at 50/80/100% of actual spend (PETPLAT-75) ---
+# Dev and prod share one AWS account, so the budget filters on the
+# Environment=dev cost-allocation tag. That tag must be activated in the
+# Billing console (Cost allocation tags) before the filter matches anything.
+resource "aws_budgets_budget" "monthly" {
+  name         = "${var.project}-${var.environment}-monthly"
+  budget_type  = "COST"
+  limit_amount = "100"
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
+
+  cost_filter {
+    name   = "TagKeyValue"
+    values = ["user:Environment$dev"]
+  }
+
+  dynamic "notification" {
+    for_each = [50, 80, 100]
+    content {
+      comparison_operator        = "GREATER_THAN"
+      threshold                  = notification.value
+      threshold_type             = "PERCENTAGE"
+      notification_type          = "ACTUAL"
+      subscriber_email_addresses = [var.budget_alert_email]
+    }
+  }
+}
