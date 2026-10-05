@@ -67,13 +67,50 @@ data "aws_iam_policy_document" "controller" {
       "ec2:RunInstances",
       "ec2:CreateFleet",
       "ec2:CreateLaunchTemplate",
-      "ec2:CreateTags",
     ]
     resources = ["*"]
 
     condition {
       test     = "StringEquals"
       variable = "aws:RequestTag/kubernetes.io/cluster/${var.cluster_name}"
+      values   = ["owned"]
+    }
+  }
+
+  # Tagging at creation only: CreateTags is allowed solely as part of a launch
+  # call (ec2:CreateAction), and only for the cluster's owner tag. A standalone
+  # CreateTags call on an existing resource is denied by this statement.
+  statement {
+    sid       = "EC2TagOnCreate"
+    effect    = "Allow"
+    actions   = ["ec2:CreateTags"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ec2:CreateAction"
+      values   = ["RunInstances", "CreateFleet", "CreateLaunchTemplate"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/kubernetes.io/cluster/${var.cluster_name}"
+      values   = ["owned"]
+    }
+  }
+
+  # Post-launch tagging (e.g. Karpenter's NodeClaim tags) only on resources that
+  # already carry the cluster owner tag. An unowned instance cannot be claimed
+  # by adding the tag, which closes the self-tag-then-terminate path.
+  statement {
+    sid       = "EC2TagOwned"
+    effect    = "Allow"
+    actions   = ["ec2:CreateTags"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceTag/kubernetes.io/cluster/${var.cluster_name}"
       values   = ["owned"]
     }
   }
